@@ -1,4 +1,5 @@
 from .bevfusion import BEVFusion
+from .sbnet import SBNet
 from .bevfusion_necks import GeneralizedLSSFPN
 from .depth_lss import DepthLSSTransform, LSSTransform
 from .loading import BEVLoadMultiViewImageFromFiles
