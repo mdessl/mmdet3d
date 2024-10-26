@@ -161,6 +161,7 @@ class BEVLoadMultiViewImageFromFiles(LoadMultiViewImageFromFiles):
 
         # img is of shape (h, w, c, num_views)
         # h and w can be different for different views
+        #print(filename)
         img_bytes = [
             get(name, backend_args=self.backend_args) for name in filename
         ]

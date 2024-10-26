@@ -245,11 +245,12 @@ class SBNet(Base3DDetector):
     ):
         imgs = batch_inputs_dict.get('imgs', None)
         points = batch_inputs_dict.get('points', None)
+        print(batch_input_metas)
         
         # Create modality masks for the batch
         batch_size = len(batch_input_metas)
-        modalities = [meta.get('sbnet_modality', 'both') for meta in batch_input_metas]
-        camera_mask = torch.tensor([m == 'camera' for m in modalities], 
+        modalities = [meta.get('sbnet_modality', None) for meta in batch_input_metas]
+        camera_mask = torch.tensor([m == 'img' for m in modalities], 
                                  device=imgs.device if imgs is not None else points.device)
         lidar_mask = torch.tensor([m == 'lidar' for m in modalities], 
                                 device=imgs.device if imgs is not None else points.device)
