@@ -45,7 +45,7 @@ model = dict(
     view_transform=dict(
         type='DepthLSSTransform',
         in_channels=256,
-        out_channels=80,
+        out_channels=256,
         image_size=[256, 704],
         feature_size=[32, 88],
         xbound=[-54.0, 54.0, 0.3],
@@ -127,7 +127,7 @@ train_pipeline = [
             'ori_lidar2img', 'img_aug_matrix', 'box_type_3d', 'sample_idx',
             'lidar_path', 'img_path', 'transformation_3d_flow', 'pcd_rotation',
             'pcd_scale_factor', 'pcd_trans', 'img_aug_matrix',
-            'lidar_aug_matrix', 'num_pts_feats'
+            'lidar_aug_matrix', 'num_pts_feats', 'sbnet_modality'
         ])
 ]
 
@@ -168,7 +168,7 @@ test_pipeline = [
         meta_keys=[
             'cam2img', 'ori_cam2img', 'lidar2cam', 'lidar2img', 'cam2lidar',
             'ori_lidar2img', 'img_aug_matrix', 'box_type_3d', 'sample_idx',
-            'lidar_path', 'img_path', 'num_pts_feats'
+            'lidar_path', 'img_path', 'num_pts_feats', 'sbnet_modality'
         ])
 ]
 
@@ -227,9 +227,10 @@ optim_wrapper = dict(
 #   - `enable` means enable scaling LR automatically
 #       or not by default.
 #   - `base_batch_size` = (8 GPUs) x (4 samples per GPU).
-auto_scale_lr = dict(enable=False, base_batch_size=32)
+auto_scale_lr = dict(enable=True, base_batch_size=32)
 
 default_hooks = dict(
     logger=dict(type='LoggerHook', interval=50),
     checkpoint=dict(type='CheckpointHook', interval=1))
 del _base_.custom_hooks
+find_unused_parameters = True

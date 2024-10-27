@@ -204,37 +204,31 @@ class SBNet(Base3DDetector):
                 batch_data_samples: List[Det3DDataSample],
                 **kwargs) -> List[Det3DDataSample]:
         """Forward of testing.
-
-        Args:
-            batch_inputs_dict (dict): The model input dict which include
-                'points' keys.
-
-                - points (list[torch.Tensor]): Point cloud of each sample.
-            batch_data_samples (List[:obj:`Det3DDataSample`]): The Data
-                Samples. It usually includes information such as
-                `gt_instance_3d`.
-
-        Returns:
-            list[:obj:`Det3DDataSample`]: Detection results of the
-            input sample. Each Det3DDataSample usually contain
-            'pred_instances_3d'. And the ``pred_instances_3d`` usually
-            contains following keys.
-
-            - scores_3d (Tensor): Classification scores, has a shape
-                (num_instances, )
-            - labels_3d (Tensor): Labels of bboxes, has a shape
-                (num_instances, ).
-            - bbox_3d (:obj:`BaseInstance3DBoxes`): Prediction of bboxes,
-                contains a tensor with shape (num_instances, 7).
         """
         batch_input_metas = [item.metainfo for item in batch_data_samples]
-        feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
+        feats = None
+        
+        # Process camera if images exist and are non-zero
+        if batch_inputs_dict.get('imgs') is not None and batch_inputs_dict['imgs'].abs().sum() > 0:
+            for meta in batch_data_samples:
+                meta.metainfo['sbnet_modality'] = 'img'
+            feats_cam = self.extract_feat(batch_inputs_dict, batch_input_metas)
+            feats = feats_cam
+        
+        # Process lidar if points exist and are non-zero
+        if batch_inputs_dict.get('points') is not None and any(p.abs().sum() > 0 for p in batch_inputs_dict['points']):
+            for meta in batch_data_samples:
+                meta.metainfo['sbnet_modality'] = 'lidar'
+            feats_lidar = self.extract_feat(batch_inputs_dict, batch_input_metas)
+            if feats is None:
+                feats = feats_lidar
+            else:
+                feats = (feats + feats_lidar) / 2
 
         if self.with_bbox_head:
             outputs = self.bbox_head.predict(feats, batch_input_metas)
 
         res = self.add_pred_to_datasample(batch_data_samples, outputs)
-
         return res
 
     def extract_feat(
@@ -245,19 +239,19 @@ class SBNet(Base3DDetector):
     ):
         imgs = batch_inputs_dict.get('imgs', None)
         points = batch_inputs_dict.get('points', None)
-        print(batch_input_metas)
         
         # Create modality masks for the batch
         batch_size = len(batch_input_metas)
         modalities = [meta.get('sbnet_modality', None) for meta in batch_input_metas]
         camera_mask = torch.tensor([m == 'img' for m in modalities], 
-                                 device=imgs.device if imgs is not None else points.device)
+                                 device=imgs.device if imgs is not None else points[0].device)
         lidar_mask = torch.tensor([m == 'lidar' for m in modalities], 
-                                device=imgs.device if imgs is not None else points.device)
+                                device=imgs.device if imgs is not None else points[0].device)
         
-        x = torch.zeros((batch_size, self.pts_neck.out_channels, *self.pts_neck.output_shape),
-                       device=imgs.device if imgs is not None else points.device)
-        
+        output_shape = (180, 180)  # Using grid size from voxelization layer
+        x = torch.zeros((batch_size, 512, *output_shape),
+                       device=imgs.device if imgs is not None else points[0].device)
+
         # Process camera samples
         if imgs is not None and camera_mask.any():
             imgs = imgs[camera_mask]
@@ -273,7 +267,9 @@ class SBNet(Base3DDetector):
                                                           for meta in cam_metas]))
             
             # Get camera features
-            cam_points = points[camera_mask] if points is not None else None
+            cam_indices = camera_mask.nonzero().squeeze(1).tolist()
+            cam_points = [points[i] for i in cam_indices] if points is not None else None
+            
             cam_feat = self.extract_img_feat(
                 imgs, cam_points, lidar2image, camera_intrinsics,
                 camera2lidar, img_aug_matrix, lidar_aug_matrix,
@@ -281,14 +277,20 @@ class SBNet(Base3DDetector):
             )
             cam_feat = self.pts_backbone(cam_feat)
             cam_feat = self.pts_neck(cam_feat)
+            if isinstance(cam_feat, list):
+                cam_feat = cam_feat[0]  # Take the first feature map if it's a list
             x[camera_mask] = cam_feat
 
         # Process lidar samples
         if points is not None and lidar_mask.any():
-            lidar_dict = {'points': points[lidar_mask]}
+            lidar_indices = lidar_mask.nonzero().squeeze(1).tolist()
+            lidar_points = [points[i] for i in lidar_indices]
+            lidar_dict = {'points': lidar_points}
             lidar_feat = self.extract_pts_feat(lidar_dict)
             lidar_feat = self.pts_backbone(lidar_feat)
             lidar_feat = self.pts_neck(lidar_feat)
+            if isinstance(lidar_feat, list):
+                lidar_feat = lidar_feat[0]  # Take the first feature map if it's a list
             x[lidar_mask] = lidar_feat
 
         return x
@@ -306,3 +308,6 @@ class SBNet(Base3DDetector):
         losses.update(bbox_loss)
 
         return losses
+
+
+

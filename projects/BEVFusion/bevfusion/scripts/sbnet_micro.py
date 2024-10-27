@@ -1,19 +1,18 @@
 import pickle
 import copy
-# /mmdetection3d/data/nuscenes/nuscenes_infos_train.pkl
+
+# Load the original data
 with open("/mmdet3d/data/nuscenes/nuscenes_infos_val.pkl", 'rb') as f:
     nuscenes_infos = pickle.load(f)
 
-# Get original data list
-original_data = nuscenes_infos["data_list"]
+# Get original data list and limit to first 10 samples
+import random
+original_data = random.sample(nuscenes_infos["data_list"], 100)  # Take 50 random samples
 sample_indices = [eg["sample_idx"] for eg in original_data]
-total_samples = max(sample_indices) + 1  # Add 1 since indices are 0-based
-
-# Assert that there are no holes in the sample indices
-assert set(range(total_samples)) == set(sample_indices), "Sample indices are not continuous"
+total_samples = max(sample_indices) + 1
 
 # Create a new list with duplicated entries
-new_data_list = [None] * (total_samples * 2)  # Pre-allocate list with correct size
+new_data_list = [None] * (total_samples * 2)
 
 for entry in original_data:
     # Add original entry (image modality)
@@ -27,16 +26,12 @@ for entry in original_data:
     lidar_entry['sample_idx'] += total_samples
     new_data_list[lidar_entry['sample_idx']] = lidar_entry
 
-# Remove any None entries (if there were gaps in sample_idx)
+# Remove any None entries
 new_data_list = [entry for entry in new_data_list if entry is not None]
 
 # Replace the original data_list with the new one
 nuscenes_infos["data_list"] = new_data_list
 
-# Verify the changes
-for i, entry in enumerate(nuscenes_infos["data_list"]):
-    print(f"Index: {i}, Sample Index: {entry['sample_idx']}, Modality: {entry['sbnet_modality']}")
-
 # Save modified file
-with open("/mmdet3d/data/nuscenes/nuscenes_infos_val.pkl", 'wb') as f:
+with open("/mmdet3d/data/nuscenes/micro.pkl", 'wb') as f:
     pickle.dump(nuscenes_infos, f)

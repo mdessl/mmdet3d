@@ -280,7 +280,8 @@ class BEVFusion(Base3DDetector):
 
         x = self.pts_backbone(x)
         x = self.pts_neck(x)
-
+        print(len(x))
+        print(x[0].shape)
         return x
 
     def loss(self, batch_inputs_dict: Dict[str, Optional[Tensor]],
