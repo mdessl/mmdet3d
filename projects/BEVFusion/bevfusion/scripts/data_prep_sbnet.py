@@ -1,7 +1,7 @@
 import pickle
 import copy
 # /mmdetection3d/data/nuscenes/nuscenes_infos_train.pkl
-with open("/mmdet3d/data/nuscenes/nuscenes_infos_val.pkl", 'rb') as f:
+with open("/mmdet3d/data/nuscenes/nuscenes_infos_train.pkl", 'rb') as f:
     nuscenes_infos = pickle.load(f)
 
 # Get original data list
@@ -38,5 +38,5 @@ for i, entry in enumerate(nuscenes_infos["data_list"]):
     print(f"Index: {i}, Sample Index: {entry['sample_idx']}, Modality: {entry['sbnet_modality']}")
 
 # Save modified file
-with open("/mmdet3d/data/nuscenes/nuscenes_infos_val.pkl", 'wb') as f:
+with open("/mmdet3d/data/nuscenes/nuscenes_infos_train.pkl", 'wb') as f:
     pickle.dump(nuscenes_infos, f)

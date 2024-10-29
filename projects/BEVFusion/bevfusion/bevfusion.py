@@ -237,6 +237,7 @@ class BEVFusion(Base3DDetector):
 
         return res
 
+
     def extract_feat(
         self,
         batch_inputs_dict,

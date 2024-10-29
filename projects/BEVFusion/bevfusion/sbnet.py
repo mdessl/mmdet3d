@@ -208,22 +208,30 @@ class SBNet(Base3DDetector):
         batch_input_metas = [item.metainfo for item in batch_data_samples]
         feats = None
         
+        import pdb; pdb.set_trace()
+
         # Process camera if images exist and are non-zero
+        feats_cam = None
         if batch_inputs_dict.get('imgs') is not None and batch_inputs_dict['imgs'].abs().sum() > 0:
             for meta in batch_data_samples:
                 meta.metainfo['sbnet_modality'] = 'img'
             feats_cam = self.extract_feat(batch_inputs_dict, batch_input_metas)
-            feats = feats_cam
         
         # Process lidar if points exist and are non-zero
+        feats_lidar = None
         if batch_inputs_dict.get('points') is not None and any(p.abs().sum() > 0 for p in batch_inputs_dict['points']):
             for meta in batch_data_samples:
                 meta.metainfo['sbnet_modality'] = 'lidar'
             feats_lidar = self.extract_feat(batch_inputs_dict, batch_input_metas)
-            if feats is None:
-                feats = feats_lidar
-            else:
-                feats = (feats + feats_lidar) / 2
+
+        if feats_cam is not None and feats_lidar is not None:
+            feats = (feats_cam + feats_lidar) / 2
+        elif feats_cam is not None:
+            feats = feats_cam
+        elif feats_lidar is not None:
+            feats = feats_lidar
+        else:
+            raise ValueError("No valid features found")
 
         if self.with_bbox_head:
             outputs = self.bbox_head.predict(feats, batch_input_metas)
@@ -242,7 +250,10 @@ class SBNet(Base3DDetector):
         
         # Create modality masks for the batch
         batch_size = len(batch_input_metas)
-        modalities = [meta.get('sbnet_modality', None) for meta in batch_input_metas]
+        
+        #modalities = [meta.get('sbnet_modality', None) for meta in batch_input_metas]
+        modalities = ['lidar' for meta in batch_input_metas]
+        
         camera_mask = torch.tensor([m == 'img' for m in modalities], 
                                  device=imgs.device if imgs is not None else points[0].device)
         lidar_mask = torch.tensor([m == 'lidar' for m in modalities], 

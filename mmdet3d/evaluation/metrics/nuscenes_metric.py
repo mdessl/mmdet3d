@@ -230,6 +230,7 @@ class NuScenesMetric(BaseMetric):
         from nuscenes.eval.detection.evaluate import NuScenesEval
 
         output_dir = osp.join(*osp.split(result_path)[:-1])
+        #import pdb; pdb.set_trace()
         nusc = NuScenes(
             version=self.version, dataroot=self.data_root, verbose=False)
         eval_set_map = {
