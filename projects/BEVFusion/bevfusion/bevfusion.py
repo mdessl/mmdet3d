@@ -246,6 +246,7 @@ class BEVFusion(Base3DDetector):
     ):
         imgs = batch_inputs_dict.get('imgs', None)
         points = batch_inputs_dict.get('points', None)
+
         features = []
         if imgs is not None:
             imgs = imgs.contiguous()
@@ -272,7 +273,7 @@ class BEVFusion(Base3DDetector):
             features.append(img_feature)
         pts_feature = self.extract_pts_feat(batch_inputs_dict)
         features.append(pts_feature)
-
+        #import pdb; pdb.set_trace()
         if self.fusion_layer is not None:
             x = self.fusion_layer(features)
         else:
@@ -281,8 +282,7 @@ class BEVFusion(Base3DDetector):
 
         x = self.pts_backbone(x)
         x = self.pts_neck(x)
-        print(len(x))
-        print(x[0].shape)
+
         return x
 
     def loss(self, batch_inputs_dict: Dict[str, Optional[Tensor]],

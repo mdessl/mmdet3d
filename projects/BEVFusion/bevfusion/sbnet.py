@@ -262,7 +262,6 @@ class SBNet(Base3DDetector):
         output_shape = (180, 180)  # Using grid size from voxelization layer
         x = torch.zeros((batch_size, 512, *output_shape),
                        device=imgs.device if imgs is not None else points[0].device)
-
         # Process camera samples
         if imgs is not None and camera_mask.any():
             imgs = imgs[camera_mask]
@@ -297,11 +296,11 @@ class SBNet(Base3DDetector):
             lidar_indices = lidar_mask.nonzero().squeeze(1).tolist()
             lidar_points = [points[i] for i in lidar_indices]
             lidar_dict = {'points': lidar_points}
-            lidar_feat = self.extract_pts_feat(lidar_dict)
+            lidar_feat = self.extract_pts_feat(lidar_dict) # lidar_feat is a tensor (bs, ...)
             lidar_feat = self.pts_backbone(lidar_feat)
             lidar_feat = self.pts_neck(lidar_feat)
-            if isinstance(lidar_feat, list):
-                lidar_feat = lidar_feat[0]  # Take the first feature map if it's a list
+            assert len(lidar_feat) == 1 and isinstance(lidar_feat, list)
+            lidar_feat = lidar_feat[0]  # Take the first feature map if it's a list
             x[lidar_mask] = lidar_feat
 
         return x
