@@ -245,74 +245,104 @@ class SBNet(Base3DDetector):
         res = self.add_pred_to_datasample(batch_data_samples, outputs)
         return res
 
-    def extract_feat(
-        self,
-        batch_inputs_dict,
-        batch_input_metas,
-        **kwargs,
-    ):
-
-
+    def extract_feat(self, batch_inputs_dict, batch_input_metas, **kwargs):
+        # Add at start of method
+        torch.cuda.reset_peak_memory_stats()
+        initial_memory = torch.cuda.memory_allocated() / 1024**2  # MB
+        
         imgs = batch_inputs_dict.get('imgs', None)
         points = batch_inputs_dict.get('points', None)
-        # Create modality masks for the batch
-        batch_size = len(batch_input_metas)
-
-        if batch_input_metas[0].get('sbnet_modality', None) is None:
-            raise ValueError("sbnet_modality not found in batch_input_metas")
-
-        modalities = [meta.get('sbnet_modality', None) for meta in batch_input_metas]
-        #modalities = ['lidar' for meta in batch_input_metas]
-        camera_mask = torch.tensor([m == 'img' for m in modalities], 
-                                 device=imgs.device if imgs is not None else points[0].device)
-        lidar_mask = torch.tensor([m == 'lidar' for m in modalities], 
-                                device=imgs.device if imgs is not None else points[0].device)
         
-        output_shape = (180, 180)  # Using grid size from voxelization layer
-        x = torch.zeros((batch_size, 512, *output_shape),
-                       device=imgs.device if imgs is not None else points[0].device)
-        # Process camera samples
-        if imgs is not None and camera_mask.any():
-            imgs = imgs[camera_mask]
-            cam_metas = [meta for meta, is_cam in zip(batch_input_metas, camera_mask) if is_cam]
-            
-            # Prepare camera inputs for the selected samples
-            lidar2image = imgs.new_tensor(np.asarray([meta['lidar2img'] for meta in cam_metas]))
-            camera_intrinsics = imgs.new_tensor(np.array([meta['cam2img'] for meta in cam_metas]))
-            camera2lidar = imgs.new_tensor(np.asarray([meta['cam2lidar'] for meta in cam_metas]))
-            img_aug_matrix = imgs.new_tensor(np.asarray([meta.get('img_aug_matrix', np.eye(4)) 
-                                                        for meta in cam_metas]))
-            lidar_aug_matrix = imgs.new_tensor(np.asarray([meta.get('lidar_aug_matrix', np.eye(4)) 
-                                                          for meta in cam_metas]))
-            
-            # Get camera features
-            cam_indices = camera_mask.nonzero().squeeze(1).tolist()
-            cam_points = [points[i] for i in cam_indices] if points is not None else None
-            
-            cam_feat = self.extract_img_feat(
-                imgs, cam_points, lidar2image, camera_intrinsics,
-                camera2lidar, img_aug_matrix, lidar_aug_matrix,
-                cam_metas
-            )
-            cam_feat = self.pts_backbone(cam_feat)
-            cam_feat = self.pts_neck(cam_feat)
-            if isinstance(cam_feat, list):
-                cam_feat = cam_feat[0]  # Take the first feature map if it's a list
-            x[camera_mask] = cam_feat
+        # Process samples in a single pass based on their modality
+        features = []
+        device = imgs.device if imgs is not None else points[0].device
+        
 
-        # Process lidar samples
-        if points is not None and lidar_mask.any():
-            lidar_indices = lidar_mask.nonzero().squeeze(1).tolist()
-            lidar_points = [points[i] for i in lidar_indices]
-            lidar_dict = {'points': lidar_points}
-            lidar_feat = self.extract_pts_feat(lidar_dict) # lidar_feat is a tensor (bs, ...)
-            lidar_feat = self.pts_backbone(lidar_feat)
-            lidar_feat = self.pts_neck(lidar_feat)
-            assert len(lidar_feat) == 1 and isinstance(lidar_feat, list)
-            lidar_feat = lidar_feat[0]  # Take the first feature map if it's a list
-            x[lidar_mask] = lidar_feat
+        import pdb; pdb.set_trace()
+        # Create batches for each modality
+        cam_batch = {'imgs': [], 'metas': [], 'points': []}
+        lidar_batch = {'points': [], 'metas': []}
+        
+        # Sort samples by modality
+        for i, meta in enumerate(batch_input_metas):
+            if meta['sbnet_modality'] == 'img':
+                cam_batch['imgs'].append(imgs[i:i+1])
+                cam_batch['metas'].append(meta)
+                if points is not None:
+                    cam_batch['points'].append(points[i])
+            else:
+                lidar_batch['points'].append(points[i])
+                lidar_batch['metas'].append(meta)
+        
+        # Process camera batch if exists
+        if cam_batch['imgs']:
+            cam_batch['imgs'] = torch.cat(cam_batch['imgs'], dim=0)
+            cam_feat = self._process_camera_batch(cam_batch)
+            features.extend([cam_feat])
+        
+        # Process lidar batch if exists
+        if lidar_batch['points']:
+            lidar_feat = self._process_lidar_batch(lidar_batch)
+            features.extend([lidar_feat])
+        
+        # Combine features in original batch order
+        combined_features = torch.zeros((len(batch_input_metas), 512, 180, 180), device=device)
+        current_cam_idx = 0
+        current_lidar_idx = 0
+        
+        for i, meta in enumerate(batch_input_metas):
+            if meta['sbnet_modality'] == 'img':
+                combined_features[i] = features[0][current_cam_idx]
+                current_cam_idx += 1
+            else:
+                combined_features[i] = features[-1][current_lidar_idx]
+                current_lidar_idx += 1
+                
+        current_memory = torch.cuda.memory_allocated() / 1024**2
+        peak_memory = torch.cuda.max_memory_allocated() / 1024**2
+        print(f"\nMemory Stats (MB):")
+        print(f"Initial: {initial_memory:.1f}")
+        print(f"Current: {current_memory:.1f}")
+        print(f"Peak: {peak_memory:.1f}")
+        print(f"Leaked: {current_memory - initial_memory:.1f}")
+        
+        return combined_features
 
-        return x
+    def _process_camera_batch(self, batch):
+        imgs = batch['imgs']
+        points = batch['points']
+        metas = batch['metas']
+        
+        # Convert lists to numpy arrays first
+        lidar2image = np.array([meta['lidar2img'] for meta in metas])
+        camera_intrinsics = np.array([meta['cam2img'] for meta in metas])
+        camera2lidar = np.array([meta['cam2lidar'] for meta in metas])
+        img_aug_matrix = np.array([meta.get('img_aug_matrix', np.eye(4)) for meta in metas])
+        lidar_aug_matrix = np.array([meta.get('lidar_aug_matrix', np.eye(4)) for meta in metas])
+        
+        # Then convert to tensors
+        lidar2image = imgs.new_tensor(lidar2image)
+        camera_intrinsics = imgs.new_tensor(camera_intrinsics)
+        camera2lidar = imgs.new_tensor(camera2lidar)
+        img_aug_matrix = imgs.new_tensor(img_aug_matrix)
+        lidar_aug_matrix = imgs.new_tensor(lidar_aug_matrix)
+        
+        feat = self.extract_img_feat(
+            imgs, points, lidar2image, camera_intrinsics,
+            camera2lidar, img_aug_matrix, lidar_aug_matrix, metas
+        )
+        feat = self.pts_backbone(feat)
+        feat = self.pts_neck(feat)
+        return feat[0] if isinstance(feat, list) else feat
+
+    def _process_lidar_batch(self, batch):
+        # Process lidar samples in a single forward pass
+        points = batch['points']
+        lidar_dict = {'points': points}
+        feat = self.extract_pts_feat(lidar_dict)
+        feat = self.pts_backbone(feat)
+        feat = self.pts_neck(feat)
+        return feat[0]
 
     def loss(self, batch_inputs_dict: Dict[str, Optional[Tensor]],
              batch_data_samples: List[Det3DDataSample],
