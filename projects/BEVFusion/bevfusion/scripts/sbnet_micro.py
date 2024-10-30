@@ -2,7 +2,7 @@ import pickle
 import copy
 
 # Load the original data
-with open("/mmdet3d/data/nuscenes/nuscenes_infos_val.pkl", 'rb') as f:
+with open("/mmdet3d/data/nuscenes/nuscenes_infos_train.pkl", 'rb') as f:
     nuscenes_infos = pickle.load(f)
 
 # Get original data list and limit to first 10 samples

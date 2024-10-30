@@ -61,6 +61,10 @@ class SBNet(Base3DDetector):
         self.bbox_head = MODELS.build(bbox_head)
 
         self.init_weights()
+        self.print_model_params()
+        # freezing both encoders except for view transform (part of img encoder) bc n channels is different from pretrained bevfusion model (channels from both encoders must be the same)
+        self.freeze_modules(module_keywords=["data_preprocessor","img_backbone","img_neck", 'pts_voxel_encoder', 'pts_middle_encoder'], exclude_keywords=["view_transform", 'pts_backbone', "pts_neck", "bbox_head"])
+
 
     def _forward(self,
                  batch_inputs: Tensor,
@@ -208,21 +212,23 @@ class SBNet(Base3DDetector):
         batch_input_metas = [item.metainfo for item in batch_data_samples]
         feats = None
         
-        import pdb; pdb.set_trace()
+
 
         # Process camera if images exist and are non-zero
         feats_cam = None
         if batch_inputs_dict.get('imgs') is not None and batch_inputs_dict['imgs'].abs().sum() > 0:
-            for meta in batch_data_samples:
-                meta.metainfo['sbnet_modality'] = 'img'
-            feats_cam = self.extract_feat(batch_inputs_dict, batch_input_metas)
+            cam_input_metas = deepcopy(batch_input_metas)
+            for meta in cam_input_metas:
+                meta['sbnet_modality'] = 'img'
+            feats_cam = self.extract_feat(batch_inputs_dict, cam_input_metas)
         
         # Process lidar if points exist and are non-zero
         feats_lidar = None
         if batch_inputs_dict.get('points') is not None and any(p.abs().sum() > 0 for p in batch_inputs_dict['points']):
-            for meta in batch_data_samples:
-                meta.metainfo['sbnet_modality'] = 'lidar'
-            feats_lidar = self.extract_feat(batch_inputs_dict, batch_input_metas)
+            lidar_input_metas = deepcopy(batch_input_metas)
+            for meta in lidar_input_metas:
+                meta['sbnet_modality'] = 'lidar'
+            feats_lidar = self.extract_feat(batch_inputs_dict, lidar_input_metas)
 
         if feats_cam is not None and feats_lidar is not None:
             feats = (feats_cam + feats_lidar) / 2
@@ -245,15 +251,18 @@ class SBNet(Base3DDetector):
         batch_input_metas,
         **kwargs,
     ):
+
+
         imgs = batch_inputs_dict.get('imgs', None)
         points = batch_inputs_dict.get('points', None)
-        
         # Create modality masks for the batch
         batch_size = len(batch_input_metas)
-        
-        #modalities = [meta.get('sbnet_modality', None) for meta in batch_input_metas]
-        modalities = ['lidar' for meta in batch_input_metas]
-        
+
+        if batch_input_metas[0].get('sbnet_modality', None) is None:
+            raise ValueError("sbnet_modality not found in batch_input_metas")
+
+        modalities = [meta.get('sbnet_modality', None) for meta in batch_input_metas]
+        #modalities = ['lidar' for meta in batch_input_metas]
         camera_mask = torch.tensor([m == 'img' for m in modalities], 
                                  device=imgs.device if imgs is not None else points[0].device)
         lidar_mask = torch.tensor([m == 'lidar' for m in modalities], 
@@ -318,6 +327,66 @@ class SBNet(Base3DDetector):
         losses.update(bbox_loss)
 
         return losses
+
+    def freeze_modules(self, module_keywords=None, exclude_keywords=None, verbose=True):
+        """Freeze model weights based on module names.
+        
+        Args:
+            module_keywords (list[str], optional): List of keywords to match module names for freezing.
+                If None, no modules will be frozen based on keywords.
+            exclude_keywords (list[str], optional): List of keywords to exclude modules from freezing.
+                Takes precedence over module_keywords.
+            verbose (bool): Whether to print freezing status. Defaults to True.
+        """
+        if module_keywords is None:
+            module_keywords = []
+        if exclude_keywords is None:
+            exclude_keywords = []
+        
+        frozen_params = 0
+        total_params = 0
+        
+        for name, module in self.named_modules():
+            # Only process leaf modules (those without children)
+            if len(list(module.children())) == 0:
+                params = list(module.parameters())
+                if not params:  # Skip modules without parameters
+                    continue
+                
+                should_freeze = any(keyword in name for keyword in module_keywords) if module_keywords else False
+                should_exclude = any(keyword in name for keyword in exclude_keywords)
+                
+                # Count parameters
+                num_params = sum(p.numel() for p in params)
+                total_params += num_params
+                
+                # Freeze if module matches criteria and isn't excluded
+                if should_freeze and not should_exclude:
+                    for param in params:
+                        param.requires_grad = False
+                    frozen_params += num_params
+                    if verbose:
+                        print(f"Froze {name}: {num_params:,} parameters")
+                else:
+                    if verbose:
+                        print(f"Left {name} unfrozen: {num_params:,} parameters")
+        
+        if verbose:
+            print(f"\nFroze {frozen_params:,} parameters out of {total_params:,} total")
+            print(f"Trainable parameters: {total_params - frozen_params:,}")
+
+    def print_model_params(self):
+        """Print model parameters statistics."""
+        print("\n=== Model Parameters ===")
+        total_params = 0
+        for name, module in self.named_modules():
+            if len(list(module.children())) == 0:  # Only print leaf modules
+                num_params = sum(p.numel() for p in module.parameters())
+                if num_params > 0:
+                    print(f"{name}: {num_params:,} parameters")
+                    total_params += num_params
+        print(f"\nTotal parameters: {total_params:,}")
+        print("=====================")
 
 
 
