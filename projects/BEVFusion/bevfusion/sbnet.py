@@ -14,6 +14,11 @@ from mmdet3d.registry import MODELS
 from mmdet3d.structures import Det3DDataSample
 from mmdet3d.utils import OptConfigType, OptMultiConfig, OptSampleList
 from .ops import Voxelization
+import torch.cuda as cuda
+import gc
+from typing import Dict, List, Optional, Tuple, Union
+from contextlib import contextmanager
+import time
 
 
 @MODELS.register_module()
@@ -245,115 +250,148 @@ class SBNet(Base3DDetector):
         res = self.add_pred_to_datasample(batch_data_samples, outputs)
         return res
 
-    def extract_feat(self, batch_inputs_dict, batch_input_metas, **kwargs):
-        # Add at start of method
-        torch.cuda.reset_peak_memory_stats()
-        initial_memory = torch.cuda.memory_allocated() / 1024**2  # MB
+    @contextmanager
+    def gpu_memory_log(self, description: str):
+        """Context manager to track GPU memory usage of a specific operation."""
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            start_memory = torch.cuda.memory_allocated() / 1024**2
+            start_time = time.time()
+            
+            try:
+                yield
+            finally:
+                torch.cuda.synchronize()
+                end_memory = torch.cuda.memory_allocated() / 1024**2
+                end_time = time.time()
+                
+                print(f"\n=== {description} ===")
+                print(f"Memory: {end_memory - start_memory:.2f} MB")
+                print(f"Time: {(end_time - start_time) * 1000:.2f} ms")
+                print(f"Peak Memory: {torch.cuda.max_memory_allocated() / 1024**2:.2f} MB")
+
+    def extract_feat(
+        self,
+        batch_inputs_dict,
+        batch_input_metas,
+        **kwargs,
+    ):
+        # Initialize memory tracking
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+            initial_memory = torch.cuda.memory_allocated() / 1024**2
         
         imgs = batch_inputs_dict.get('imgs', None)
         points = batch_inputs_dict.get('points', None)
         
-        # Process samples in a single pass based on their modality
-        features = []
-        device = imgs.device if imgs is not None else points[0].device
+        # Determine the dtype based on inputs
+        if imgs is not None:
+            dtype = imgs.dtype
+        elif points is not None and len(points) > 0:
+            dtype = points[0].dtype
+        
+        # Create modality masks for the batch
+        batch_size = len(batch_input_metas)
+        
+        if batch_input_metas[0].get('sbnet_modality', None) is None:
+            raise ValueError("sbnet_modality not found in batch_input_metas")
+
+        modalities = [meta.get('sbnet_modality', None) for meta in batch_input_metas]
+        camera_mask = torch.tensor([m == 'img' for m in modalities], 
+                                 device=imgs.device if imgs is not None else points[0].device)
+        lidar_mask = torch.tensor([m == 'lidar' for m in modalities], 
+                                device=imgs.device if imgs is not None else points[0].device)
         
 
-        # Create batches for each modality
-        cam_batch = {'imgs': [], 'metas': [], 'points': []}
-        lidar_batch = {'points': [], 'metas': []}
+        dtype = None
+        cam_feat = None
+        lidar_feat = None
         
-        # Sort samples by modality
-        for i, meta in enumerate(batch_input_metas):
-            if meta['sbnet_modality'] == 'img':
-                cam_batch['imgs'].append(imgs[i:i+1])
-                cam_batch['metas'].append(meta)
-                if points is not None:
-                    cam_batch['points'].append(points[i])
-            else:
-                lidar_batch['points'].append(points[i])
-                lidar_batch['metas'].append(meta)
-        
-        # Process camera batch if exists
-        if cam_batch['imgs']:
-            cam_batch['imgs'] = torch.cat(cam_batch['imgs'], dim=0)
-            cam_feat = self._process_camera_batch(cam_batch)
-            features.extend([cam_feat])
-        
-        # Process lidar batch if exists
-        if lidar_batch['points']:
-            lidar_feat = self._process_lidar_batch(lidar_batch)
-            features.extend([lidar_feat])
-        
-        # Combine features in original batch order
-        combined_features = torch.zeros((len(batch_input_metas), 512, 180, 180), device=device)
-        current_cam_idx = 0
-        current_lidar_idx = 0
-        
-        for i, meta in enumerate(batch_input_metas):
-            if meta['sbnet_modality'] == 'img':
-                combined_features[i] = features[0][current_cam_idx]
-                current_cam_idx += 1
-            else:
-                combined_features[i] = features[-1][current_lidar_idx]
-                current_lidar_idx += 1
+        # Process camera samples
+        if imgs is not None and camera_mask.any():
+            with self.gpu_memory_log("Camera Processing"):
+                imgs = imgs[camera_mask]
+                cam_metas = [meta for meta, is_cam in zip(batch_input_metas, camera_mask) if is_cam]
+                # Prepare camera inputs for the selected samples
+                lidar2image = imgs.new_tensor(np.asarray([meta['lidar2img'] for meta in cam_metas]))
+                camera_intrinsics = imgs.new_tensor(np.array([meta['cam2img'] for meta in cam_metas]))
+                camera2lidar = imgs.new_tensor(np.asarray([meta['cam2lidar'] for meta in cam_metas]))
+                img_aug_matrix = imgs.new_tensor(np.asarray([meta.get('img_aug_matrix', np.eye(4)) 
+                                                            for meta in cam_metas]))
+                lidar_aug_matrix = imgs.new_tensor(np.asarray([meta.get('lidar_aug_matrix', np.eye(4)) 
+                                                              for meta in cam_metas]))
                 
-        current_memory = torch.cuda.memory_allocated() / 1024**2
-        peak_memory = torch.cuda.max_memory_allocated() / 1024**2
-        print(f"\nMemory Stats (MB):")
-        print(f"Initial: {initial_memory:.1f}")
-        print(f"Current: {current_memory:.1f}")
-        print(f"Peak: {peak_memory:.1f}")
-        print(f"Leaked: {current_memory - initial_memory:.1f}")
-        
-        return combined_features
+                # Get camera features
+                cam_indices = camera_mask.nonzero().squeeze(1).tolist()
+                cam_points = [points[i] for i in cam_indices] if points is not None else None
+                
+                cam_feat = self.extract_img_feat(
+                    imgs, cam_points, lidar2image, camera_intrinsics,
+                    camera2lidar, img_aug_matrix, lidar_aug_matrix,
+                    cam_metas
+                )
+                cam_feat = self.pts_backbone(cam_feat)
+                cam_feat = self.pts_neck(cam_feat)
+                if isinstance(cam_feat, list):
+                    cam_feat = cam_feat[0]  # Take the first feature map if it's a list
+                dtype = cam_feat.dtype
 
-    def _process_camera_batch(self, batch):
-        imgs = batch['imgs']
-        points = batch['points']
-        metas = batch['metas']
-        
-        # Convert lists to numpy arrays first
-        lidar2image = np.array([meta['lidar2img'] for meta in metas])
-        camera_intrinsics = np.array([meta['cam2img'] for meta in metas])
-        camera2lidar = np.array([meta['cam2lidar'] for meta in metas])
-        img_aug_matrix = np.array([meta.get('img_aug_matrix', np.eye(4)) for meta in metas])
-        lidar_aug_matrix = np.array([meta.get('lidar_aug_matrix', np.eye(4)) for meta in metas])
-        
-        # Then convert to tensors
-        lidar2image = imgs.new_tensor(lidar2image)
-        camera_intrinsics = imgs.new_tensor(camera_intrinsics)
-        camera2lidar = imgs.new_tensor(camera2lidar)
-        img_aug_matrix = imgs.new_tensor(img_aug_matrix)
-        lidar_aug_matrix = imgs.new_tensor(lidar_aug_matrix)
-        
-        feat = self.extract_img_feat(
-            imgs, points, lidar2image, camera_intrinsics,
-            camera2lidar, img_aug_matrix, lidar_aug_matrix, metas
-        )
-        feat = self.pts_backbone(feat)
-        feat = self.pts_neck(feat)
-        return feat[0] if isinstance(feat, list) else feat
+        # Process lidar samples
+        if points is not None and lidar_mask.any():
+            with self.gpu_memory_log("Lidar Processing"):
+                lidar_indices = lidar_mask.nonzero().squeeze(1).tolist()
+                lidar_points = [points[i] for i in lidar_indices]
+                lidar_dict = {'points': lidar_points}
+                lidar_feat = self.extract_pts_feat(lidar_dict) # lidar_feat is a tensor (bs, ...)
+                lidar_feat = self.pts_backbone(lidar_feat)
+                lidar_feat = self.pts_neck(lidar_feat)
+                assert len(lidar_feat) == 1 and isinstance(lidar_feat, list)
+                lidar_feat = lidar_feat[0]  # Take the first feature map if it's a list
+                if dtype is None:
+                    dtype = lidar_feat.dtype
 
-    def _process_lidar_batch(self, batch):
-        # Process lidar samples in a single forward pass
-        points = batch['points']
-        lidar_dict = {'points': points}
-        feat = self.extract_pts_feat(lidar_dict)
-        feat = self.pts_backbone(feat)
-        feat = self.pts_neck(feat)
-        return feat[0]
+        if dtype is None:
+            raise ValueError("Neither camera nor lidar features were processed successfully")
+
+        output_shape = (180, 180)
+        device = imgs.device if imgs is not None else points[0].device
+        x = torch.zeros((batch_size, 512, *output_shape), device=device, dtype=dtype)
+        
+        if lidar_feat is not None:
+            x[lidar_mask] = lidar_feat
+        if cam_feat is not None:
+            x[camera_mask] = cam_feat
+        # Memory reporting and cleanup
+
+        """
+        if torch.cuda.is_available():
+            current_memory = torch.cuda.memory_allocated() / 1024**2
+            peak_memory = torch.cuda.max_memory_allocated() / 1024**2
+            print(f"\nGPU Memory Usage in extract_feat:")
+            print(f"Current Memory: {current_memory:.2f} MB")
+            print(f"Peak Memory: {peak_memory:.2f} MB")
+            print(f"Memory Change: {current_memory - initial_memory:.2f} MB")
+            
+            if peak_memory > 16000:
+                print("High memory usage detected, cleaning up...")
+                torch.cuda.empty_cache()
+                gc.collect()
+        """
+        return x
 
     def loss(self, batch_inputs_dict: Dict[str, Optional[Tensor]],
              batch_data_samples: List[Det3DDataSample],
              **kwargs) -> List[Det3DDataSample]:
-        batch_input_metas = [item.metainfo for item in batch_data_samples]
-        feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
+        with self.gpu_memory_log("Total Loss Calculation"):
+            with self.gpu_memory_log("Feature Extraction"):
+                batch_input_metas = [item.metainfo for item in batch_data_samples]
+                feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
 
-        losses = dict()
-        if self.with_bbox_head:
-            bbox_loss = self.bbox_head.loss(feats, batch_data_samples)
-
-        losses.update(bbox_loss)
+            losses = dict()
+            if self.with_bbox_head:
+                with self.gpu_memory_log("BBox Head Loss"):
+                    bbox_loss = self.bbox_head.loss(feats, batch_data_samples)
+                losses.update(bbox_loss)
 
         return losses
 
@@ -405,8 +443,8 @@ class SBNet(Base3DDetector):
             print(f"Trainable parameters: {total_params - frozen_params:,}")
 
     def print_model_params(self):
-        """Print model parameters statistics."""
-        print("\n=== Model Parameters ===")
+        """Print model parameters statistics and GPU memory usage."""
+        print("\n=== Model Parameters and GPU Usage ===")
         total_params = 0
         for name, module in self.named_modules():
             if len(list(module.children())) == 0:  # Only print leaf modules
@@ -414,7 +452,15 @@ class SBNet(Base3DDetector):
                 if num_params > 0:
                     print(f"{name}: {num_params:,} parameters")
                     total_params += num_params
+        
         print(f"\nTotal parameters: {total_params:,}")
+        
+        if torch.cuda.is_available():
+            print("\nGPU Information:")
+            print(f"GPU Device: {torch.cuda.get_device_name()}")
+            print(f"Current Memory Usage: {torch.cuda.memory_allocated() / 1024**2:.2f} MB")
+            print(f"Current Memory Cached: {torch.cuda.memory_reserved() / 1024**2:.2f} MB")
+            print(f"Max Memory Usage: {torch.cuda.max_memory_allocated() / 1024**2:.2f} MB")
         print("=====================")
 
 
