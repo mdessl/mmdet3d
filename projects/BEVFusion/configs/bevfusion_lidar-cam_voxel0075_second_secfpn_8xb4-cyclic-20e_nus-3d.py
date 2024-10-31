@@ -241,3 +241,4 @@ default_hooks = dict(
     logger=dict(type='LoggerHook', interval=50),
     checkpoint=dict(type='CheckpointHook', interval=1))
 del _base_.custom_hooks
+#find_unused_parameters = False

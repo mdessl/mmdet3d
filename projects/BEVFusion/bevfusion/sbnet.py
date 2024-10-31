@@ -246,38 +246,102 @@ class SBNet(Base3DDetector):
         return res
 
     def extract_feat(self, batch_inputs_dict, batch_input_metas, **kwargs):
-        """Extract features from images and points."""
-        # Add validation at the start of extract_feat
-        self._validate_batch_modality(batch_input_metas)
+        # Add at start of method
+        torch.cuda.reset_peak_memory_stats()
+        initial_memory = torch.cuda.memory_allocated() / 1024**2  # MB
         
         imgs = batch_inputs_dict.get('imgs', None)
         points = batch_inputs_dict.get('points', None)
         
-        # Get modality from first sample (all samples in batch will have same modality)
-        modality = batch_input_metas[0]['sbnet_modality']
+        # Process samples in a single pass based on their modality
+        features = []
+        device = imgs.device if imgs is not None else points[0].device
         
-        if modality == 'img':
-            # Process camera batch
-            lidar2image = imgs.new_tensor([meta['lidar2img'] for meta in batch_input_metas])
-            camera_intrinsics = imgs.new_tensor([meta['cam2img'] for meta in batch_input_metas])
-            camera2lidar = imgs.new_tensor([meta['cam2lidar'] for meta in batch_input_metas])
-            img_aug_matrix = imgs.new_tensor([meta.get('img_aug_matrix', np.eye(4)) 
-                                            for meta in batch_input_metas])
-            lidar_aug_matrix = imgs.new_tensor([meta.get('lidar_aug_matrix', np.eye(4)) 
-                                              for meta in batch_input_metas])
-            
-            feat = self.extract_img_feat(
-                imgs, points, lidar2image, camera_intrinsics,
-                camera2lidar, img_aug_matrix, lidar_aug_matrix, batch_input_metas
-            )
-        else:
-            # Process lidar batch
-            feat = self.extract_pts_feat({'points': points})
-            
+
+        # Create batches for each modality
+        cam_batch = {'imgs': [], 'metas': [], 'points': []}
+        lidar_batch = {'points': [], 'metas': []}
+        
+        # Sort samples by modality
+        for i, meta in enumerate(batch_input_metas):
+            if meta['sbnet_modality'] == 'img':
+                cam_batch['imgs'].append(imgs[i:i+1])
+                cam_batch['metas'].append(meta)
+                if points is not None:
+                    cam_batch['points'].append(points[i])
+            else:
+                lidar_batch['points'].append(points[i])
+                lidar_batch['metas'].append(meta)
+        
+        # Process camera batch if exists
+        if cam_batch['imgs']:
+            cam_batch['imgs'] = torch.cat(cam_batch['imgs'], dim=0)
+            cam_feat = self._process_camera_batch(cam_batch)
+            features.extend([cam_feat])
+        
+        # Process lidar batch if exists
+        if lidar_batch['points']:
+            lidar_feat = self._process_lidar_batch(lidar_batch)
+            features.extend([lidar_feat])
+        
+        # Combine features in original batch order
+        combined_features = torch.zeros((len(batch_input_metas), 512, 180, 180), device=device)
+        current_cam_idx = 0
+        current_lidar_idx = 0
+        
+        for i, meta in enumerate(batch_input_metas):
+            if meta['sbnet_modality'] == 'img':
+                combined_features[i] = features[0][current_cam_idx]
+                current_cam_idx += 1
+            else:
+                combined_features[i] = features[-1][current_lidar_idx]
+                current_lidar_idx += 1
+                
+        current_memory = torch.cuda.memory_allocated() / 1024**2
+        peak_memory = torch.cuda.max_memory_allocated() / 1024**2
+        print(f"\nMemory Stats (MB):")
+        print(f"Initial: {initial_memory:.1f}")
+        print(f"Current: {current_memory:.1f}")
+        print(f"Peak: {peak_memory:.1f}")
+        print(f"Leaked: {current_memory - initial_memory:.1f}")
+        
+        return combined_features
+
+    def _process_camera_batch(self, batch):
+        imgs = batch['imgs']
+        points = batch['points']
+        metas = batch['metas']
+        
+        # Convert lists to numpy arrays first
+        lidar2image = np.array([meta['lidar2img'] for meta in metas])
+        camera_intrinsics = np.array([meta['cam2img'] for meta in metas])
+        camera2lidar = np.array([meta['cam2lidar'] for meta in metas])
+        img_aug_matrix = np.array([meta.get('img_aug_matrix', np.eye(4)) for meta in metas])
+        lidar_aug_matrix = np.array([meta.get('lidar_aug_matrix', np.eye(4)) for meta in metas])
+        
+        # Then convert to tensors
+        lidar2image = imgs.new_tensor(lidar2image)
+        camera_intrinsics = imgs.new_tensor(camera_intrinsics)
+        camera2lidar = imgs.new_tensor(camera2lidar)
+        img_aug_matrix = imgs.new_tensor(img_aug_matrix)
+        lidar_aug_matrix = imgs.new_tensor(lidar_aug_matrix)
+        
+        feat = self.extract_img_feat(
+            imgs, points, lidar2image, camera_intrinsics,
+            camera2lidar, img_aug_matrix, lidar_aug_matrix, metas
+        )
         feat = self.pts_backbone(feat)
         feat = self.pts_neck(feat)
-        
         return feat[0] if isinstance(feat, list) else feat
+
+    def _process_lidar_batch(self, batch):
+        # Process lidar samples in a single forward pass
+        points = batch['points']
+        lidar_dict = {'points': points}
+        feat = self.extract_pts_feat(lidar_dict)
+        feat = self.pts_backbone(feat)
+        feat = self.pts_neck(feat)
+        return feat[0]
 
     def loss(self, batch_inputs_dict: Dict[str, Optional[Tensor]],
              batch_data_samples: List[Det3DDataSample],
@@ -352,19 +416,6 @@ class SBNet(Base3DDetector):
                     total_params += num_params
         print(f"\nTotal parameters: {total_params:,}")
         print("=====================")
-
-    def _validate_batch_modality(self, batch_input_metas):
-        """Validate that all samples in the batch have the same modality."""
-        modalities = [meta['sbnet_modality'] for meta in batch_input_metas]
-        unique_modalities = set(modalities)
-        
-        if len(unique_modalities) > 1:
-            raise ValueError(
-                f'Batch contains multiple modalities: {unique_modalities}. '
-                f'All modalities in batch: {modalities}'
-            )
-        
-        print(f'Batch modality: {modalities[0]}, Batch size: {len(modalities)}')
 
 
 

@@ -171,7 +171,7 @@ test_pipeline = [
             'lidar_path', 'img_path', 'num_pts_feats', 'sbnet_modality'
         ])
 ]
-
+"""
 # Add a custom sampler for SBNet
 sampler = dict(
     type='GroupSampler',
@@ -179,22 +179,11 @@ sampler = dict(
     group_key='sbnet_modality',
     shuffle=True
 )
-
+#     sampler=sampler,  # Use our custom sampler
+"""
 train_dataloader = dict(
-    batch_size=4,
-    num_workers=4,
-    persistent_workers=True,
-    sampler=sampler,  # Use our custom sampler
     dataset=dict(
-        type=dataset_type,
-        data_root=data_root,
-        ann_file='nuscenes_infos_train.pkl',
-        pipeline=train_pipeline,
-        modality=input_modality,
-        test_mode=False,
-        data_prefix=data_prefix,
-        use_valid_flag=True,
-        box_type_3d='LiDAR'))
+        dataset=dict(pipeline=train_pipeline, modality=input_modality)))
 
 val_dataloader = dict(
     dataset=dict(pipeline=test_pipeline, modality=input_modality))
@@ -254,4 +243,4 @@ default_hooks = dict(
     logger=dict(type='LoggerHook', interval=50),
     checkpoint=dict(type='CheckpointHook', interval=1))
 del _base_.custom_hooks
-find_unused_parameters = True
+#find_unused_parameters = True
