@@ -66,7 +66,7 @@ class SBNet(Base3DDetector):
         self.bbox_head = MODELS.build(bbox_head)
 
         self.init_weights()
-        self.print_model_params()
+        #self.print_model_params()
         # freezing both encoders except for view transform (part of img encoder) bc n channels is different from pretrained bevfusion model (channels from both encoders must be the same)
         self.freeze_modules(module_keywords=["data_preprocessor","img_backbone","img_neck", 'pts_voxel_encoder', 'pts_middle_encoder'], exclude_keywords=["view_transform", 'pts_backbone', "pts_neck", "bbox_head"])
 
