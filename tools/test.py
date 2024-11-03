@@ -131,6 +131,8 @@ def main():
         assert 'tta_pipeline' in cfg, 'Cannot find ``tta_pipeline`` in config.'
         cfg.test_dataloader.dataset.pipeline = cfg.tta_pipeline
         cfg.model = ConfigDict(**cfg.tta_model, module=cfg.model)
+    
+    cfg.test_dataloader.dataset.pipeline.insert(9,dict(type='AddMissingModality', zero_ratio=0.5, zero_modality="lidar"))
 
     # build the runner from config
     if 'runner_type' not in cfg:

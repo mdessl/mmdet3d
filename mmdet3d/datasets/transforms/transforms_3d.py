@@ -2683,3 +2683,31 @@ class LaserMix(BaseTransform):
         repr_str += f'pre_transform={self.pre_transform}, '
         repr_str += f'prob={self.prob})'
         return repr_str
+
+# could be that we need to BaseTransfor
+@TRANSFORMS.register_module()
+class AddMissingModality(BaseTransform):
+
+    def __init__(
+        self,
+        zero_ratio,
+        zero_modality
+    ):
+        self.zero_ratio = zero_ratio
+        self.zero_modality = zero_modality
+
+    def transform(self, input_dict: dict) -> dict:
+        if self.zero_modality == "camera":
+            imgs = data["img"]
+            new_imgs = []
+            for img in imgs:
+                if random.random() < self.zero_ratio:
+                    img = torch.zeros_like(img)
+                new_imgs.append(img)
+            data["img"] = new_imgs
+        elif self.zero_modality == "lidar":
+            points = data["points"]
+            if random.random() < self.zero_ratio:
+                points.tensor = torch.zeros_like(points.tensor)
+            data["points"] = points
+        return data
