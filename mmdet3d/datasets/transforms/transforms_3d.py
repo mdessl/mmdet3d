@@ -2699,15 +2699,21 @@ class AddMissingModality(BaseTransform):
     def transform(self, input_dict: dict) -> dict:
         #print(input_dict["inputs"])
         #print(input_dict["data_samples"])
+        input_dict["img_not_zero"] = True
+        input_dict["lidar_not_zero"] = True
         if self.zero_modality == "camera":
-            img = input_dict["inputs"]["img"]
             if random.random() < self.zero_ratio:
-                img = torch.zeros_like(img)
-            input_dict["inputs"]["img"] = img
+                imgs = input_dict["img"]
+                new_imgs = []
+                for img in imgs:
+                    new_imgs.append(np.zeros_like(img))
+                input_dict["img_not_zero"] = False
+                input_dict["img"] = new_imgs
         elif self.zero_modality == "lidar":
-            points = input_dict["inputs"]["points"]
             if random.random() < self.zero_ratio:
-                points = torch.zeros_like(points)
-            input_dict["inputs"]["points"] = points
-            
+                points = input_dict["points"]
+                points.tensor = torch.tensor(np.zeros_like(points))
+                input_dict["points"] = points
+                input_dict["lidar_not_zero"] = False
+
         return input_dict

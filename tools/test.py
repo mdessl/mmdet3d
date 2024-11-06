@@ -145,7 +145,7 @@ def main():
     # Add missing modality transform if specified
     if args.missing_modality != 'none':
         cfg.test_dataloader.dataset.pipeline.insert(
-            9,
+            5,
             dict(
                 type='AddMissingModality',
                 zero_ratio=args.missing_ratio,

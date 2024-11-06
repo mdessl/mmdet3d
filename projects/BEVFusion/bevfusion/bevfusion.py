@@ -228,6 +228,7 @@ class BEVFusion(Base3DDetector):
                 contains a tensor with shape (num_instances, 7).
         """
         batch_input_metas = [item.metainfo for item in batch_data_samples]
+        
         feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
 
         if self.with_bbox_head:

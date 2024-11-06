@@ -217,11 +217,9 @@ class SBNet(Base3DDetector):
         batch_input_metas = [item.metainfo for item in batch_data_samples]
         feats = None
         
-
-
         # Process camera if images exist and are non-zero
         feats_cam = None
-        if batch_inputs_dict.get('imgs') is not None and batch_inputs_dict['imgs'].abs().sum() > 0:
+        if batch_inputs_dict.get('imgs') is not None and batch_input_metas[0].get('img_not_zero'):
             cam_input_metas = deepcopy(batch_input_metas)
             for meta in cam_input_metas:
                 meta['sbnet_modality'] = 'img'
@@ -229,12 +227,12 @@ class SBNet(Base3DDetector):
         
         # Process lidar if points exist and are non-zero
         feats_lidar = None
-        if batch_inputs_dict.get('points') is not None and any(p.abs().sum() > 0 for p in batch_inputs_dict['points']):
+        if batch_inputs_dict.get('points') is not None and batch_input_metas[0].get('lidar_not_zero'):
             lidar_input_metas = deepcopy(batch_input_metas)
             for meta in lidar_input_metas:
                 meta['sbnet_modality'] = 'lidar'
             feats_lidar = self.extract_feat(batch_inputs_dict, lidar_input_metas)
-
+        
         if feats_cam is not None and feats_lidar is not None:
             feats = (feats_cam + feats_lidar) / 2
             print("averaging")
