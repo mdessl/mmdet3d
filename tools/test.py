@@ -57,6 +57,16 @@ def parse_args():
         help='job launcher')
     parser.add_argument(
         '--tta', action='store_true', help='Test time augmentation')
+    parser.add_argument(
+        '--missing_modality',
+        choices=['none', 'lidar', 'camera'],
+        default='none',
+        help='Specify which modality to remove during testing')
+    parser.add_argument(
+        '--missing_ratio',
+        type=float,
+        default=1.0,
+        help='Ratio of modality to remove (0.0-1.0)')
     # When using PyTorch version >= 2.0.0, the `torch.distributed.launch`
     # will pass the `--local-rank` parameter to `tools/test.py` instead
     # of `--local_rank`.
@@ -132,7 +142,16 @@ def main():
         cfg.test_dataloader.dataset.pipeline = cfg.tta_pipeline
         cfg.model = ConfigDict(**cfg.tta_model, module=cfg.model)
     
-    cfg.test_dataloader.dataset.pipeline.insert(9,dict(type='AddMissingModality', zero_ratio=0.5, zero_modality="lidar"))
+    # Add missing modality transform if specified
+    if args.missing_modality != 'none':
+        cfg.test_dataloader.dataset.pipeline.insert(
+            9,
+            dict(
+                type='AddMissingModality',
+                zero_ratio=args.missing_ratio,
+                zero_modality=args.missing_modality
+            )
+        )
 
     # build the runner from config
     if 'runner_type' not in cfg:

@@ -237,6 +237,7 @@ class SBNet(Base3DDetector):
 
         if feats_cam is not None and feats_lidar is not None:
             feats = (feats_cam + feats_lidar) / 2
+            print("averaging")
         elif feats_cam is not None:
             feats = feats_cam
         elif feats_lidar is not None:
@@ -309,7 +310,6 @@ class SBNet(Base3DDetector):
         
         # Process camera samples
         if imgs is not None and camera_mask.any():
-            with self.gpu_memory_log("Camera Processing"):
                 imgs = imgs[camera_mask]
                 cam_metas = [meta for meta, is_cam in zip(batch_input_metas, camera_mask) if is_cam]
                 # Prepare camera inputs for the selected samples
@@ -338,7 +338,6 @@ class SBNet(Base3DDetector):
 
         # Process lidar samples
         if points is not None and lidar_mask.any():
-            with self.gpu_memory_log("Lidar Processing"):
                 lidar_indices = lidar_mask.nonzero().squeeze(1).tolist()
                 lidar_points = [points[i] for i in lidar_indices]
                 lidar_dict = {'points': lidar_points}
@@ -382,17 +381,14 @@ class SBNet(Base3DDetector):
     def loss(self, batch_inputs_dict: Dict[str, Optional[Tensor]],
              batch_data_samples: List[Det3DDataSample],
              **kwargs) -> List[Det3DDataSample]:
-        with self.gpu_memory_log("Total Loss Calculation"):
-            with self.gpu_memory_log("Feature Extraction"):
-                batch_input_metas = [item.metainfo for item in batch_data_samples]
-                feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
 
-            losses = dict()
-            if self.with_bbox_head:
-                with self.gpu_memory_log("BBox Head Loss"):
-                    bbox_loss = self.bbox_head.loss(feats, batch_data_samples)
-                losses.update(bbox_loss)
+        batch_input_metas = [item.metainfo for item in batch_data_samples]
+        feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
 
+        losses = dict()
+        if self.with_bbox_head:
+            bbox_loss = self.bbox_head.loss(feats, batch_data_samples)
+        losses.update(bbox_loss)
         return losses
 
     def freeze_modules(self, module_keywords=None, exclude_keywords=None, verbose=True):

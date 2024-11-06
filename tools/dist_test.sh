@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-
 CONFIG=$1
 CHECKPOINT=$2
 GPUS=$3
@@ -19,4 +17,4 @@ python -m torch.distributed.launch \
     $CONFIG \
     $CHECKPOINT \
     --launcher pytorch \
-    ${@:4}
+    ${@:4}  # Pass all remaining arguments starting from the 4th one
