@@ -5,8 +5,11 @@ point_cloud_range = [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
 input_modality = dict(use_lidar=True, use_camera=True)
 backend_args = None
 
+custom_imports = dict(
+    imports=['projects.BEVFusion.bevfusion'], allow_failed_imports=False)
+
 model = dict(
-    type='SBNet',
+    type='BEVFusion',
     data_preprocessor=dict(
         type='Det3DDataPreprocessor',
         mean=[123.675, 116.28, 103.53],
@@ -45,7 +48,7 @@ model = dict(
     view_transform=dict(
         type='DepthLSSTransform',
         in_channels=256,
-        out_channels=256,
+        out_channels=80,
         image_size=[256, 704],
         feature_size=[32, 88],
         xbound=[-54.0, 54.0, 0.3],
@@ -54,7 +57,16 @@ model = dict(
         dbound=[1.0, 60.0, 0.5],
         downsample=2),
     fusion_layer=dict(
-        type='ConvFuser', in_channels=[80, 256], out_channels=256))
+        type='ConvFuser', in_channels=[80, 256], out_channels=256)),
+    bbox_heads=dict(
+        type='BEVSegmentationHead',
+        in_channels=256,
+        grid_transform=dict(
+            input_scope=[[-51.2, 51.2, 0.8], [-51.2, 51.2, 0.8]],
+            output_scope=[[-50, 50, 0.5], [-50, 50, 0.5]]
+        ),
+        classes='${map_classes}',
+        loss_decode=dict(type='FocalLoss'))
 
 train_pipeline = [
     dict(
@@ -127,7 +139,7 @@ train_pipeline = [
             'ori_lidar2img', 'img_aug_matrix', 'box_type_3d', 'sample_idx',
             'lidar_path', 'img_path', 'transformation_3d_flow', 'pcd_rotation',
             'pcd_scale_factor', 'pcd_trans', 'img_aug_matrix',
-            'lidar_aug_matrix', 'num_pts_feats', 'sbnet_modality'
+            'lidar_aug_matrix', 'num_pts_feats'
         ])
 ]
 
@@ -168,34 +180,13 @@ test_pipeline = [
         meta_keys=[
             'cam2img', 'ori_cam2img', 'lidar2cam', 'lidar2img', 'cam2lidar',
             'ori_lidar2img', 'img_aug_matrix', 'box_type_3d', 'sample_idx',
-            'lidar_path', 'img_path', 'num_pts_feats', 'sbnet_modality'
+            'lidar_path', 'img_path', 'num_pts_feats'
         ])
 ]
 
-# Add a custom sampler for SBNet
-sampler = dict(
-    type='GroupSampler',
-    groups=['img', 'lidar'],
-    group_key='sbnet_modality',
-    shuffle=True
-)
-
 train_dataloader = dict(
-    batch_size=4,
-    num_workers=4,
-    persistent_workers=True,
-    sampler=sampler,  # Use our custom sampler
     dataset=dict(
-        type=dataset_type,
-        data_root=data_root,
-        ann_file='nuscenes_infos_train.pkl',
-        pipeline=train_pipeline,
-        modality=input_modality,
-        test_mode=False,
-        data_prefix=data_prefix,
-        use_valid_flag=True,
-        box_type_3d='LiDAR'))
-
+        dataset=dict(pipeline=train_pipeline, modality=input_modality)))
 val_dataloader = dict(
     dataset=dict(pipeline=test_pipeline, modality=input_modality))
 test_dataloader = val_dataloader
@@ -254,4 +245,4 @@ default_hooks = dict(
     logger=dict(type='LoggerHook', interval=50),
     checkpoint=dict(type='CheckpointHook', interval=1))
 del _base_.custom_hooks
-find_unused_parameters = True
+#find_unused_parameters = False

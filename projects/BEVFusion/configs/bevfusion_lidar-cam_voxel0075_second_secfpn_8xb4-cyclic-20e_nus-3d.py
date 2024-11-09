@@ -4,14 +4,8 @@ _base_ = [
 point_cloud_range = [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
 input_modality = dict(use_lidar=True, use_camera=True)
 backend_args = None
-
 custom_imports = dict(
-    imports=[
-        'projects.BEVFusion.bevfusion',
-        'projects.BEVFusion.bevfusion.utils'
-    ],
-    allow_failed_imports=False
-)
+    imports=['projects.BEVFusion.bevfusion'], allow_failed_imports=False)
 
 model = dict(
     type='BEVFusion',
