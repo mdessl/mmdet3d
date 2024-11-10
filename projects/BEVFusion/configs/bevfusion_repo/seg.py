@@ -355,7 +355,7 @@ model = dict(
     [-50, 50, 0.5]
 ],
             ),
-            classes=${map_classes},
+            classes=map_classes,
             loss='focal',
         ),
     ),

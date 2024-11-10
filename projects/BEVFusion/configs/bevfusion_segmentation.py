@@ -8,6 +8,9 @@ backend_args = None
 custom_imports = dict(
     imports=['projects.BEVFusion.bevfusion'], allow_failed_imports=False)
 
+map_classes = ['drivable_area', 'ped_crossing', 'walkway', 'stop_line', 'carpark_area', 'divider']
+data_root = 'data/nuscenes/'
+
 model = dict(
     type='BEVFusion',
     data_preprocessor=dict(
@@ -51,8 +54,8 @@ model = dict(
         out_channels=80,
         image_size=[256, 704],
         feature_size=[32, 88],
-        xbound=[-54.0, 54.0, 0.3],
-        ybound=[-54.0, 54.0, 0.3],
+        xbound=[-51.2, 51.2, 0.4],  # Updated bounds
+        ybound=[-51.2, 51.2, 0.4],
         zbound=[-10.0, 10.0, 20.0],
         dbound=[1.0, 60.0, 0.5],
         downsample=2),
@@ -65,8 +68,8 @@ model = dict(
             input_scope=[[-51.2, 51.2, 0.8], [-51.2, 51.2, 0.8]],
             output_scope=[[-50, 50, 0.5], [-50, 50, 0.5]]
         ),
-        classes='${map_classes}',
-        loss_decode=dict(type='FocalLoss'))
+        classes=map_classes,
+        loss_decode=dict(type='FocalLoss')))
 
 train_pipeline = [
     dict(
@@ -106,6 +109,12 @@ train_pipeline = [
         scale_ratio_range=[0.9, 1.1],
         rot_range=[-0.78539816, 0.78539816],
         translation_std=0.5),
+    dict(type='LoadBEVSegmentation',
+         classes=map_classes,
+         dataset_root=data_root,
+         xbound=[-50.0, 50.0, 0.5],
+         ybound=[-50.0, 50.0, 0.5],
+    ),
     dict(type='BEVFusionRandomFlip3D'),
     dict(type='PointsRangeFilter', point_cloud_range=point_cloud_range),
     dict(type='ObjectRangeFilter', point_cloud_range=point_cloud_range),
@@ -171,12 +180,18 @@ test_pipeline = [
         rot_lim=[0.0, 0.0],
         rand_flip=False,
         is_train=False),
+    dict(type='LoadBEVSegmentation',
+         classes=map_classes,
+         dataset_root=data_root,
+         xbound=[-50.0, 50.0, 0.5],
+         ybound=[-50.0, 50.0, 0.5],
+    ),
     dict(
         type='PointsRangeFilter',
         point_cloud_range=[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]),
     dict(
         type='Pack3DDetInputs',
-        keys=['img', 'points', 'gt_bboxes_3d', 'gt_labels_3d'],
+        keys=['img', 'points', 'gt_bboxes_3d', 'gt_labels_3d', 'gt_masks_bev'],
         meta_keys=[
             'cam2img', 'ori_cam2img', 'lidar2cam', 'lidar2img', 'cam2lidar',
             'ori_lidar2img', 'img_aug_matrix', 'box_type_3d', 'sample_idx',
