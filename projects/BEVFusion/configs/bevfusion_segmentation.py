@@ -57,7 +57,7 @@ model = dict(
         dbound=[1.0, 60.0, 0.5],
         downsample=2),
     fusion_layer=dict(
-        type='ConvFuser', in_channels=[80, 256], out_channels=256)),
+        type='ConvFuser', in_channels=[80, 256], out_channels=256),
     bbox_heads=dict(
         type='BEVSegmentationHead',
         in_channels=256,
