@@ -58,7 +58,11 @@ class BEVFusion(Base3DDetector):
         self.pts_backbone = MODELS.build(pts_backbone)
         self.pts_neck = MODELS.build(pts_neck)
 
-        self.bbox_head = MODELS.build(bbox_head)
+        if bbox_head is not None:
+            self.bbox_head = MODELS.build(bbox_head)
+        
+        if seg_head is not None:
+            self.seg_head = MODELS.build(seg_head)
 
         self.init_weights()
 
@@ -203,41 +207,19 @@ class BEVFusion(Base3DDetector):
     def predict(self, batch_inputs_dict: Dict[str, Optional[Tensor]],
                 batch_data_samples: List[Det3DDataSample],
                 **kwargs) -> List[Det3DDataSample]:
-        """Forward of testing.
-
-        Args:
-            batch_inputs_dict (dict): The model input dict which include
-                'points' keys.
-
-                - points (list[torch.Tensor]): Point cloud of each sample.
-            batch_data_samples (List[:obj:`Det3DDataSample`]): The Data
-                Samples. It usually includes information such as
-                `gt_instance_3d`.
-
-        Returns:
-            list[:obj:`Det3DDataSample`]: Detection results of the
-            input sample. Each Det3DDataSample usually contain
-            'pred_instances_3d'. And the ``pred_instances_3d`` usually
-            contains following keys.
-
-            - scores_3d (Tensor): Classification scores, has a shape
-                (num_instances, )
-            - labels_3d (Tensor): Labels of bboxes, has a shape
-                (num_instances, ).
-            - bbox_3d (:obj:`BaseInstance3DBoxes`): Prediction of bboxes,
-                contains a tensor with shape (num_instances, 7).
-        """
+        """Forward of testing."""
         batch_input_metas = [item.metainfo for item in batch_data_samples]
         
         feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
 
-        if self.with_bbox_head:
+        if self.with_seg_head:
+            outputs = self.seg_head.predict(feats, batch_input_metas)
+        elif self.with_bbox_head:
             outputs = self.bbox_head.predict(feats, batch_input_metas)
 
         res = self.add_pred_to_datasample(batch_data_samples, outputs)
-
+        print("train works!!")
         return res
-
 
     def extract_feat(
         self,
@@ -293,9 +275,13 @@ class BEVFusion(Base3DDetector):
         feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
 
         losses = dict()
-        if self.with_bbox_head:
-            bbox_loss = self.bbox_head.loss(feats, batch_data_samples)
+        import pdb; pdb.set_trace()
 
-        losses.update(bbox_loss)
+        if self.with_seg_head:
+            if len(batch_data_samples) > 1:
+                raise ValueError("Segmentation head only supports single sample per batch")
+            losses = self.seg_head(feats, batch_data_samples["gt_masks_bev"])
+        elif self.with_bbox_head:
+            losses = self.bbox_head.loss(feats, batch_data_samples)
 
         return losses

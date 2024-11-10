@@ -54,14 +54,14 @@ model = dict(
         out_channels=80,
         image_size=[256, 704],
         feature_size=[32, 88],
-        xbound=[-51.2, 51.2, 0.4],  # Updated bounds
-        ybound=[-51.2, 51.2, 0.4],
+        xbound=[-54.0, 54.0, 0.3],
+        ybound=[-54.0, 54.0, 0.3],
         zbound=[-10.0, 10.0, 20.0],
         dbound=[1.0, 60.0, 0.5],
         downsample=2),
     fusion_layer=dict(
         type='ConvFuser', in_channels=[80, 256], out_channels=256),
-    bbox_heads=dict(
+    seg_head=dict(
         type='BEVSegmentationHead',
         in_channels=256,
         grid_transform=dict(
@@ -69,7 +69,7 @@ model = dict(
             output_scope=[[-50, 50, 0.5], [-50, 50, 0.5]]
         ),
         classes=map_classes,
-        loss_decode=dict(type='FocalLoss')))
+        loss="focal"))
 
 train_pipeline = [
     dict(
