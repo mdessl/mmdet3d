@@ -92,29 +92,33 @@ class BEVFusion(Base3DDetector):
             the logger.
         """
         log_vars = []
+        device = next(iter(losses.values())).device
+        
+        # Initialize total loss
+        total_loss = torch.zeros(1, dtype=torch.float32, device=device, requires_grad=True)
+        
         for loss_name, loss_value in losses.items():
             if isinstance(loss_value, torch.Tensor):
                 log_vars.append([loss_name, loss_value.mean()])
+                if 'focal' in loss_name:  # Include focal losses in total loss
+                    total_loss = total_loss + loss_value.mean()
             elif is_list_of(loss_value, torch.Tensor):
-                log_vars.append(
-                    [loss_name,
-                     sum(_loss.mean() for _loss in loss_value)])
-            else:
-                raise TypeError(
-                    f'{loss_name} is not a tensor or list of tensors')
+                mean_loss = sum(_loss.mean() for _loss in loss_value)
+                log_vars.append([loss_name, mean_loss])
+                if 'focal' in loss_name:  # Include focal losses in total loss
+                    total_loss = total_loss + mean_loss
 
-        loss = sum(value for key, value in log_vars if 'loss' in key)
-        log_vars.insert(0, ['loss', loss])
-        log_vars = OrderedDict(log_vars)  # type: ignore
+        log_vars.insert(0, ['loss', total_loss])
+        log_vars = OrderedDict(log_vars)
 
         for loss_name, loss_value in log_vars.items():
-            # reduce loss when distributed training
             if dist.is_available() and dist.is_initialized():
-                loss_value = loss_value.data.clone()
-                dist.all_reduce(loss_value.div_(dist.get_world_size()))
-            log_vars[loss_name] = loss_value.item()
+                if isinstance(loss_value, torch.Tensor):
+                    loss_value = loss_value.data.clone()
+                    dist.all_reduce(loss_value.div_(dist.get_world_size()))
+                log_vars[loss_name] = loss_value.item() if isinstance(loss_value, torch.Tensor) else loss_value
 
-        return loss, log_vars  # type: ignore
+        return total_loss, log_vars
 
     def init_weights(self) -> None:
         if self.img_backbone is not None:
@@ -213,13 +217,17 @@ class BEVFusion(Base3DDetector):
         feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
 
         if self.with_seg_head:
+            if len(batch_data_samples) > 1:
+                raise ValueError("Segmentation head only supports single sample per batch")
             outputs = self.seg_head.predict(feats, batch_input_metas)
+            return self.add_pred_to_datasample(batch_data_samples, 
+                                             data_instances_3d=outputs)
         elif self.with_bbox_head:
             outputs = self.bbox_head.predict(feats, batch_input_metas)
+            return self.add_pred_to_datasample(batch_data_samples, 
+                                             data_instances_3d=outputs)
 
-        res = self.add_pred_to_datasample(batch_data_samples, outputs)
-        print("train works!!")
-        return res
+        return batch_data_samples
 
     def extract_feat(
         self,
@@ -270,17 +278,22 @@ class BEVFusion(Base3DDetector):
 
     def loss(self, batch_inputs_dict: Dict[str, Optional[Tensor]],
              batch_data_samples: List[Det3DDataSample],
-             **kwargs) -> List[Det3DDataSample]:
+             **kwargs) -> Dict[str, Tensor]:
         batch_input_metas = [item.metainfo for item in batch_data_samples]
         feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
-
         losses = dict()
-        import pdb; pdb.set_trace()
-
         if self.with_seg_head:
             if len(batch_data_samples) > 1:
                 raise ValueError("Segmentation head only supports single sample per batch")
-            losses = self.seg_head(feats, batch_data_samples["gt_masks_bev"])
+            device = feats.device if isinstance(feats, torch.Tensor) else feats[0].device
+            gt_masks_bev = batch_input_metas[0]["gt_masks_bev"].to(device)
+            seg_losses = self.seg_head(feats, gt_masks_bev)
+            # Ensure all loss values are float tensors and properly named
+            for k, v in seg_losses.items():
+                if isinstance(v, (float, int)):
+                    losses[k] = torch.tensor(float(v), device=device, dtype=torch.float32, requires_grad=True)
+                else:
+                    losses[k] = v
         elif self.with_bbox_head:
             losses = self.bbox_head.loss(feats, batch_data_samples)
 

@@ -163,24 +163,61 @@ class NuScenesMetric(BaseMetric):
         # load annotations
         self.data_infos = load(
             self.ann_file, backend_args=self.backend_args)['data_list']
-        result_dict, tmp_dir = self.format_results(results, classes,
-                                                   self.jsonfile_prefix)
-
+        
         metric_dict = {}
 
-        if self.format_only:
-            logger.info(
-                f'results are saved in {osp.basename(self.jsonfile_prefix)}')
-            return metric_dict
+        # Handle segmentation evaluation
+        if any('pred_seg_logits' in result for result in results):
+            thresholds = torch.tensor([0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.65])
+            num_classes = len(self.dataset_meta['seg_classes'])
+            num_thresholds = len(thresholds)
 
-        for metric in self.metrics:
-            ap_dict = self.nus_evaluate(
-                result_dict, classes=classes, metric=metric, logger=logger)
-            for result in ap_dict:
-                metric_dict[result] = ap_dict[result]
+            tp = torch.zeros(num_classes, num_thresholds)
+            fp = torch.zeros(num_classes, num_thresholds)
+            fn = torch.zeros(num_classes, num_thresholds)
 
-        if tmp_dir is not None:
-            tmp_dir.cleanup()
+            for result in results:
+                pred = result['pred_instances_3d'].seg_logits
+                label = result['gt_seg_mask']
+
+                pred = pred.detach().reshape(num_classes, -1)
+                label = label.detach().bool().reshape(num_classes, -1)
+
+                pred = pred[:, :, None] >= thresholds
+                label = label[:, :, None]
+
+                tp += (pred & label).sum(dim=1)
+                fp += (pred & ~label).sum(dim=1)
+                fn += (~pred & label).sum(dim=1)
+
+            ious = tp / (tp + fp + fn + 1e-7)
+
+            # Calculate per-class metrics
+            for index, name in enumerate(self.dataset_meta['seg_classes']):
+                metric_dict[f'seg/{name}/iou@max'] = ious[index].max().item()
+                for threshold, iou in zip(thresholds, ious[index]):
+                    metric_dict[f'seg/{name}/iou@{threshold.item():.2f}'] = iou.item()
+            metric_dict['seg/mean/iou@max'] = ious.max(dim=1).values.mean().item()
+
+        # Handle bbox evaluation (existing code)
+        if any('pred_instances_3d' in result and hasattr(result['pred_instances_3d'], 'bboxes_3d') 
+               for result in results):
+            result_dict, tmp_dir = self.format_results(results, classes,
+                                                     self.jsonfile_prefix)
+            if self.format_only:
+                logger.info(
+                    f'results are saved in {osp.basename(self.jsonfile_prefix)}')
+                return metric_dict
+
+            for metric in self.metrics:
+                ap_dict = self.nus_evaluate(
+                    result_dict, classes=classes, metric=metric, logger=logger)
+                for result in ap_dict:
+                    metric_dict[result] = ap_dict[result]
+
+            if tmp_dir is not None:
+                tmp_dir.cleanup()
+
         return metric_dict
 
     def nus_evaluate(self,

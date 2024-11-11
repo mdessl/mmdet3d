@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any, Tuple
 
 import mmcv
 import numpy as np
+import torch
 from mmengine.fileio import get
 
 from mmdet3d.datasets.transforms import LoadMultiViewImageFromFiles
@@ -234,6 +235,13 @@ class LoadBEVSegmentation(BaseTransform):
             self.maps[location] = NuScenesMap(dataset_root, location)
 
     def transform(self, data: Dict[str, Any]) -> Dict[str, Any]:
+
+        if 'lidar_aug_matrix' not in data: # we
+            rotation = np.eye(3)
+            data['lidar_aug_matrix'] = np.eye(4)
+            data['lidar_aug_matrix'][:3, :] = rotation @ data[
+                'lidar_aug_matrix'][:3, :]
+
         lidar2point = data["lidar_aug_matrix"]
         point2lidar = np.linalg.inv(lidar2point)
         lidar2ego = data["lidar2ego"]
@@ -280,5 +288,5 @@ class LoadBEVSegmentation(BaseTransform):
                 index = layer_names.index(layer_name)
                 labels[k, masks[index]] = 1
 
-        data["gt_masks_bev"] = labels
+        data["gt_masks_bev"] = torch.from_numpy(labels)
         return data

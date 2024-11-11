@@ -63,7 +63,7 @@ model = dict(
         type='ConvFuser', in_channels=[80, 256], out_channels=256),
     seg_head=dict(
         type='BEVSegmentationHead',
-        in_channels=256,
+        in_channels=512,
         grid_transform=dict(
             input_scope=[[-51.2, 51.2, 0.8], [-51.2, 51.2, 0.8]],
             output_scope=[[-50, 50, 0.5], [-50, 50, 0.5]]
@@ -148,7 +148,7 @@ train_pipeline = [
             'ori_lidar2img', 'img_aug_matrix', 'box_type_3d', 'sample_idx',
             'lidar_path', 'img_path', 'transformation_3d_flow', 'pcd_rotation',
             'pcd_scale_factor', 'pcd_trans', 'img_aug_matrix',
-            'lidar_aug_matrix', 'num_pts_feats'
+            'lidar_aug_matrix', 'num_pts_feats','gt_masks_bev'
         ])
 ]
 
@@ -191,11 +191,11 @@ test_pipeline = [
         point_cloud_range=[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]),
     dict(
         type='Pack3DDetInputs',
-        keys=['img', 'points', 'gt_bboxes_3d', 'gt_labels_3d', 'gt_masks_bev'],
+        keys=['img', 'points', 'gt_bboxes_3d', 'gt_labels_3d'],
         meta_keys=[
             'cam2img', 'ori_cam2img', 'lidar2cam', 'lidar2img', 'cam2lidar',
             'ori_lidar2img', 'img_aug_matrix', 'box_type_3d', 'sample_idx',
-            'lidar_path', 'img_path', 'num_pts_feats'
+            'lidar_path', 'img_path', 'num_pts_feats','lidar_aug_matrix','gt_masks_bev'
         ])
 ]
 
@@ -260,4 +260,4 @@ default_hooks = dict(
     logger=dict(type='LoggerHook', interval=50),
     checkpoint=dict(type='CheckpointHook', interval=1))
 del _base_.custom_hooks
-#find_unused_parameters = False
+find_unused_parameters=True

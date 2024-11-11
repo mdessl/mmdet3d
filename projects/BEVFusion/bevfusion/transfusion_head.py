@@ -987,7 +987,7 @@ class BEVSegmentationHead(nn.Module):
             x = x[0]
 
         x = self.transform(x)
-        x = self.classifier(x)
+        x = self.classifier(x).squeeze(0)
 
         if self.training:
             losses = {}
@@ -1002,3 +1002,42 @@ class BEVSegmentationHead(nn.Module):
             return losses
         else:
             return torch.sigmoid(x)
+
+    def predict_by_feat(self, x: torch.Tensor) -> InstanceData:
+        """Predict segmentation results from features.
+
+        Args:
+            x (torch.Tensor): Input features
+
+        Returns:
+            InstanceData: Segmentation predictions containing:
+                - seg_logits (Tensor): Raw segmentation logits
+                - seg_preds (Tensor): Binary predictions after sigmoid
+        """
+        if isinstance(x, (list, tuple)):
+            x = x[0]
+
+        x = self.transform(x)
+        logits = self.classifier(x).squeeze(0)
+        preds = torch.sigmoid(logits)
+        
+        results = InstanceData()
+        results.seg_logits = logits
+        results.seg_preds = preds
+        
+        return results
+
+    def predict(self, x: torch.Tensor, batch_input_metas: List[dict], 
+                test_cfg: Optional[dict] = None) -> List[InstanceData]:
+        """Forward function for testing.
+
+        Args:
+            x (torch.Tensor): Input features
+            batch_input_metas (List[dict]): Batch meta info
+            test_cfg (dict, optional): Test config. Defaults to None.
+
+        Returns:
+            List[InstanceData]: List of segmentation predictions
+        """
+        results = self.predict_by_feat(x)
+        return [results]  # Return as list to match other heads' format

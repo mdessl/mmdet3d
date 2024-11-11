@@ -125,7 +125,8 @@ class BEVFusionRandomFlip3D:
             if 'gt_bboxes_3d' in data:
                 data['gt_bboxes_3d'].flip('horizontal')
             if 'gt_masks_bev' in data:
-                data['gt_masks_bev'] = data['gt_masks_bev'][:, :, ::-1].copy()
+                #data['gt_masks_bev'] = data['gt_masks_bev'][:, :, ::-1].copy()
+                data['gt_masks_bev'] = torch.flip(data['gt_masks_bev'], dims=[2])
 
         if flip_vertical:
             rotation = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]]) @ rotation
@@ -134,7 +135,8 @@ class BEVFusionRandomFlip3D:
             if 'gt_bboxes_3d' in data:
                 data['gt_bboxes_3d'].flip('vertical')
             if 'gt_masks_bev' in data:
-                data['gt_masks_bev'] = data['gt_masks_bev'][:, ::-1, :].copy()
+                #data['gt_masks_bev'] = data['gt_masks_bev'][:, ::-1, :].copy()
+                data['gt_masks_bev'] = torch.flip(data['gt_masks_bev'], dims=[1])
 
         if 'lidar_aug_matrix' not in data:
             data['lidar_aug_matrix'] = np.eye(4)

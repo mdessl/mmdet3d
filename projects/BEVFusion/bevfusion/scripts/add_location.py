@@ -77,8 +77,8 @@ def parse_args():
         'version',
         help='v1.0-trainval or v1.0-mini'
     ) 
-    parser.add_argument('--pkl_path', default="/root/mmdet3d/data/nuscenes/nuscenes_infos_", help='Path to the input .pkl file')
-    parser.add_argument('--nusc_root', default="/root/mmdet3d/data/nuscenes", help='NuScenes dataset root path')
+    parser.add_argument('--pkl_path', default="/mmdet3d/data/nuscenes/nuscenes_infos_", help='Path to the input .pkl file')
+    parser.add_argument('--nusc_root', default="/mmdet3d/data/nuscenes", help='NuScenes dataset root path')
     parser.add_argument(
         '--out-path', 
         default=None,
