@@ -13,7 +13,7 @@ from .utils import (BBoxBEVL1Cost, HeuristicAssigner3D, HungarianAssigner3D,
 from .metrics import NuScenesBEVFusionMetric
 
 __all__ = [
-    'BEVFusion', 'TransFusionHead', 'ConvFuser', 'ImageAug3D', 'GridMask',
+    'BEVFusion', 'TransFusionHead', 'ConvFuser','AdaptiveFuser', 'ImageAug3D', 'GridMask',
     'GeneralizedLSSFPN', 'HungarianAssigner3D', 'BBoxBEVL1Cost', 'IoU3DCost',
     'HeuristicAssigner3D', 'DepthLSSTransform', 'LSSTransform',
     'BEVLoadMultiViewImageFromFiles', 'BEVFusionSparseEncoder',

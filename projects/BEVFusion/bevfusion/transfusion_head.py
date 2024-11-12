@@ -41,7 +41,58 @@ class ConvFuser(nn.Sequential):
     def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
         return super().forward(torch.cat(inputs, dim=1))
 
+@MODELS.register_module()
+class AdaptiveFuser(nn.Module):
+    def __init__(self, in_channels: List[int], intermediate_channels: int, 
+                 out_channels: int, use_residual: bool = True) -> None:
+        super().__init__()
+        self.in_channels = in_channels
+        self.intermediate_channels = intermediate_channels
+        self.out_channels = out_channels
+        self.use_residual = use_residual
 
+        # Channel adaptation layers
+        self.adaptation_layers = nn.ModuleList([
+            nn.Sequential(
+                nn.Conv2d(in_ch, intermediate_channels, 1, bias=False),
+                nn.BatchNorm2d(intermediate_channels),
+                nn.ReLU(True)
+            ) for in_ch in in_channels
+        ])
+
+        # Fusion convolution
+        self.fusion = nn.Sequential(
+            nn.Conv2d(intermediate_channels * len(in_channels), 
+                     out_channels, 3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(True)
+        )
+
+        if use_residual and intermediate_channels == out_channels:
+            self.residual = nn.Identity()
+        else:
+            self.residual = nn.Sequential(
+                nn.Conv2d(intermediate_channels * len(in_channels), 
+                         out_channels, 1, bias=False),
+                nn.BatchNorm2d(out_channels)
+            )
+
+    def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
+        # Adapt each input to intermediate channels
+        adapted = [layer(x) for layer, x in zip(self.adaptation_layers, inputs)]
+        
+        # Concatenate adapted features
+        fused = torch.cat(adapted, dim=1)
+        
+        # Apply fusion convolution
+        out = self.fusion(fused)
+        
+        # Add residual if enabled
+        if self.use_residual:
+            out = out + self.residual(fused)
+            
+        return out
+        
 @MODELS.register_module()
 class TransFusionHead(nn.Module):
 
