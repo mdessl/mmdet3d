@@ -6,7 +6,11 @@ input_modality = dict(use_lidar=True, use_camera=True)
 backend_args = None
 
 custom_imports = dict(
-    imports=['projects.BEVFusion.bevfusion'], allow_failed_imports=False)
+    imports=[
+        'projects.BEVFusion.bevfusion',  # for base components
+    ], 
+    allow_failed_imports=False
+)
 
 map_classes = ['drivable_area', 'ped_crossing', 'walkway', 'stop_line', 'carpark_area', 'divider']
 data_root = 'data/nuscenes/'
@@ -261,3 +265,16 @@ default_hooks = dict(
     checkpoint=dict(type='CheckpointHook', interval=1))
 del _base_.custom_hooks
 find_unused_parameters=True
+
+backend_args = None
+
+val_evaluator = dict(
+        type='NuScenesBEVFusionMetric',
+        data_root='data/nuscenes/',
+        ann_file='data/nuscenes/nuscenes_infos_val.pkl',
+        metric='bbox',  # still needed for NuScenesMetric parent class
+        seg_classes=map_classes,  # specify segmentation classes
+        backend_args=backend_args
+    )
+
+test_evaluator = val_evaluator
