@@ -290,6 +290,9 @@ custom_hooks = [
         type='EarlyStoppingHook',
         monitor='iter',
         rule='greater',
-        stopping_threshold=100
+        stopping_threshold=2,  # Stop after 100 iterations
+        patience=0 
     )
 ]
+
+find_unused_parameters=True

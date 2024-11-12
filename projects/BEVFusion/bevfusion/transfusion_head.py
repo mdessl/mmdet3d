@@ -89,8 +89,7 @@ class AdaptiveFuser(nn.Module):
         
         # Add residual if enabled
         if self.use_residual:
-            residual = self.residual(fused)
-            out = out + residual
+            out = out + self.residual(fused)
             
         return out
         
@@ -1039,7 +1038,7 @@ class BEVSegmentationHead(nn.Module):
             x = x[0]
 
         x = self.transform(x)
-        x = self.classifier(x).squeeze(0)
+        x = self.classifier(x)
 
         if self.training:
             losses = {}

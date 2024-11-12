@@ -270,7 +270,7 @@ train_dataloader = dict(
     batch_size=2,
     num_workers=4,
     persistent_workers=True,
-    sampler=dict(type='DefaultSampler', shuffle=True),
+    sampler=dict(type='DefaultSampsler', shuffle=True),
     dataset=dict(
         type='CBGSDataset',
         dataset=dict(
