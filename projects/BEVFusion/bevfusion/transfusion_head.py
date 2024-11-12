@@ -68,14 +68,14 @@ class AdaptiveFuser(nn.Module):
             nn.ReLU(True)
         )
 
-        if use_residual and intermediate_channels == out_channels:
-            self.residual = nn.Identity()
-        else:
+        if use_residual:
             self.residual = nn.Sequential(
                 nn.Conv2d(intermediate_channels * len(in_channels), 
                          out_channels, 1, bias=False),
                 nn.BatchNorm2d(out_channels)
-            )
+            ) if intermediate_channels * len(in_channels) != out_channels else nn.Identity()
+        else:
+            self.residual = None
 
     def forward(self, inputs: List[torch.Tensor]) -> torch.Tensor:
         # Adapt each input to intermediate channels
@@ -89,7 +89,8 @@ class AdaptiveFuser(nn.Module):
         
         # Add residual if enabled
         if self.use_residual:
-            out = out + self.residual(fused)
+            residual = self.residual(fused)
+            out = out + residual
             
         return out
         
