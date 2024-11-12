@@ -7,7 +7,6 @@ with open("/mmdet3d/data/nuscenes/nuscenes_infos_train.pkl", 'rb') as f:
 import pickle
 import copy
 # /mmdetection3d/data/nuscenes/nuscenes_infos_train.pkl
-w
 
 # Get original data list
 original_data = nuscenes_infos["data_list"]

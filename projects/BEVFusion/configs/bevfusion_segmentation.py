@@ -249,7 +249,11 @@ param_scheduler = [
 ]
 
 # runtime settings
-train_cfg = dict(by_epoch=True, max_epochs=6, val_interval=1)
+train_cfg = dict(
+    by_epoch=True, 
+    max_epochs=1,
+    val_interval=0.2  # Validate every 20% of epoch
+)
 val_cfg = dict()
 test_cfg = dict()
 
@@ -267,8 +271,6 @@ auto_scale_lr = dict(enable=True, base_batch_size=32)
 default_hooks = dict(
     logger=dict(type='LoggerHook', interval=50),
     checkpoint=dict(type='CheckpointHook', interval=1))
-del _base_.custom_hooks
-find_unused_parameters=True
 
 backend_args = None
 
@@ -282,3 +284,12 @@ val_evaluator = dict(
     )
 
 test_evaluator = val_evaluator
+
+custom_hooks = [
+    dict(
+        type='EarlyStoppingHook',
+        monitor='iter',
+        rule='greater',
+        stopping_threshold=100
+    )
+]
