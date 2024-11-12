@@ -217,8 +217,6 @@ class BEVFusion(Base3DDetector):
         feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
 
         if self.with_seg_head:
-            if len(batch_data_samples) > 1:
-                raise ValueError("Segmentation head only supports single sample per batch")
             outputs = self.seg_head.predict(feats, batch_input_metas)
             return self.add_pred_to_datasample(batch_data_samples, 
                                              data_instances_3d=outputs)
@@ -283,15 +281,15 @@ class BEVFusion(Base3DDetector):
         feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
         losses = dict()
         if self.with_seg_head:
-            if len(batch_data_samples) > 1:
-                raise ValueError("Segmentation head only supports single sample per batch")
             device = feats.device if isinstance(feats, torch.Tensor) else feats[0].device
-            gt_masks_bev = batch_input_metas[0]["gt_masks_bev"].to(device)
+            gt_masks_bev = torch.stack([meta["gt_masks_bev"].to(device) 
+                                      for meta in batch_input_metas])
             seg_losses = self.seg_head(feats, gt_masks_bev)
             # Ensure all loss values are float tensors and properly named
             for k, v in seg_losses.items():
                 if isinstance(v, (float, int)):
-                    losses[k] = torch.tensor(float(v), device=device, dtype=torch.float32, requires_grad=True)
+                    losses[k] = torch.tensor(float(v), device=device, 
+                                           dtype=torch.float32, requires_grad=True)
                 else:
                     losses[k] = v
         elif self.with_bbox_head:
