@@ -284,6 +284,7 @@ val_evaluator = dict(
     )
 
 test_evaluator = val_evaluator
+"""
 
 custom_hooks = [
     dict(
@@ -294,5 +295,6 @@ custom_hooks = [
         patience=0 
     )
 ]
-
+"""
+# early stopping doesnt work
 find_unused_parameters=True
