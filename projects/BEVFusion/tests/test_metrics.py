@@ -9,8 +9,8 @@ class TestNuScenesBEVFusionMetric(unittest.TestCase):
         seg_classes = ['drivable_area', 'ped_crossing', 'walkway']
         
         self.metric = NuScenesBEVFusionMetric(
-            data_root='tests/data/nuscenes',
-            ann_file='tests/data/nuscenes/nuscenes_infos_val.pkl',
+            data_root='data/nuscenes',
+            ann_file='data/nuscenes/nuscenes_infos_val.pkl',
             metric='bbox',
             seg_classes=seg_classes
         )
@@ -42,7 +42,7 @@ class TestNuScenesBEVFusionMetric(unittest.TestCase):
             results.append(result)
 
         metrics = self.metric._compute_segmentation_metrics(results)
-
+        print(type(results))
         self.assertIn('seg/drivable_area/iou@max', metrics)
         self.assertIn('seg/mean/iou@max', metrics)
         self.assertTrue(0 <= metrics['seg/mean/iou@max'] <= 1)

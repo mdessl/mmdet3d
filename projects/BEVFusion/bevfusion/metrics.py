@@ -28,13 +28,11 @@ class NuScenesBEVFusionMetric(NuScenesMetric):
         # First compute detection metrics using parent class
         #metrics = super().compute_metrics(results)
         metrics = {}
+        import pdb; pdb.set_trace()
         # Add segmentation metrics if segmentation results exist
-        if any('pred_instances_3d' in result and 
-               hasattr(result['pred_instances_3d'], 'seg_logits') 
-               for result in results):
-            seg_metrics = self._compute_segmentation_metrics(results)
-            metrics.update(seg_metrics)
-
+        seg_metrics = self._compute_segmentation_metrics(results)
+        metrics.update(seg_metrics)
+        print(metrics)
         return metrics
 
     def _compute_segmentation_metrics(self, results: List[dict]) -> Dict[str, float]:
@@ -54,7 +52,7 @@ class NuScenesBEVFusionMetric(NuScenesMetric):
         fn = torch.zeros(num_classes, num_thresholds)
 
         for result in results:
-            pred_logits = result['pred_instances_3d'].seg_logits
+            pred_logits = result['pred_instances_3d']["seg_logits"]
             gt_mask = result['gt_seg_mask']
 
             # Reshape predictions and ground truth
@@ -83,5 +81,6 @@ class NuScenesBEVFusionMetric(NuScenesMetric):
 
         # Mean metrics
         metrics['seg/mean/iou@max'] = ious.max(dim=1).values.mean().item()
+
 
         return metrics 
