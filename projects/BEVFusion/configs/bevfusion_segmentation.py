@@ -249,11 +249,7 @@ param_scheduler = [
 ]
 
 # runtime settings
-train_cfg = dict(
-    by_epoch=True, 
-    max_epochs=1,
-    val_interval=0.2  # Validate every 20% of epoch
-)
+train_cfg = dict(by_epoch=True, max_epochs=6, val_interval=1)
 val_cfg = dict()
 test_cfg = dict()
 
