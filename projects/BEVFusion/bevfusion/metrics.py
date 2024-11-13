@@ -28,7 +28,6 @@ class NuScenesBEVFusionMetric(NuScenesMetric):
         # First compute detection metrics using parent class
         #metrics = super().compute_metrics(results)
         metrics = {}
-        import pdb; pdb.set_trace()
         # Add segmentation metrics if segmentation results exist
         seg_metrics = self._compute_segmentation_metrics(results)
         metrics.update(seg_metrics)
@@ -53,7 +52,7 @@ class NuScenesBEVFusionMetric(NuScenesMetric):
 
         for result in results:
             pred_logits = result['pred_instances_3d']["seg_logits"]
-            gt_mask = result['gt_seg_mask']
+            gt_mask = result['pred_instances_3d']['gt_masks_bev']
 
             # Reshape predictions and ground truth
             pred = pred_logits.detach().reshape(num_classes, -1)

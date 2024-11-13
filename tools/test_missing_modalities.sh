@@ -6,7 +6,7 @@ GPUS=$3
 CFG_OPTIONS="$@"  # Capture remaining arguments
 
 # Array of ratios to test
-RATIOS=(0.0 0.5 1.0) #0.0 0.1 0.3 0.5 0.7 0.9 
+RATIOS=(0.5 1.0) #0.0 0.1 0.3 0.5 0.7 0.9 
 MODALITIES=("lidar" "camera") # "camera" "lidar" 
 
 # Create a timestamp for unique output directory

@@ -219,10 +219,9 @@ class BEVFusion(Base3DDetector):
         if self.with_seg_head:
             outputs = self.seg_head.predict(feats, batch_input_metas)
 
-            import pdb; pdb.set_trace()
             # Add ground truth BEV masks to outputs
             for i, data_sample in enumerate(batch_data_samples):
-                outputs[i]['gt_masks_bev'] = data_sample["gt_masks_bev"]
+                outputs[i]['gt_masks_bev'] = batch_input_metas[i]["gt_masks_bev"]
             return self.add_pred_to_datasample(batch_data_samples, 
                                              data_instances_3d=outputs)
         elif self.with_bbox_head:
