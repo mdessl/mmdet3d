@@ -45,7 +45,7 @@ model = dict(
     view_transform=dict(
         type='DepthLSSTransform',
         in_channels=256,
-        out_channels=256,
+        out_channels=80,
         image_size=[256, 704],
         feature_size=[32, 88],
         xbound=[-54.0, 54.0, 0.3],
@@ -227,20 +227,20 @@ param_scheduler = [
 train_cfg = dict(by_epoch=True, max_epochs=6, val_interval=1)
 val_cfg = dict()
 test_cfg = dict()
-
 optim_wrapper = dict(
     type='OptimWrapper',
-    optimizer=dict(type='AdamW', lr=0.0002, weight_decay=0.01),
-    clip_grad=dict(max_norm=35, norm_type=2))
+    optimizer=dict(type='AdamW', lr=0.00005, weight_decay=0.01),
+    clip_grad=dict(max_norm=35, norm_type=2),
+    accumulative_counts=16)
+
 
 # Default setting for scaling LR automatically
 #   - `enable` means enable scaling LR automatically
 #       or not by default.
 #   - `base_batch_size` = (8 GPUs) x (4 samples per GPU).
-auto_scale_lr = dict(enable=True, base_batch_size=32)
+auto_scale_lr = dict(enable=False, base_batch_size=32)
 
 default_hooks = dict(
     logger=dict(type='LoggerHook', interval=50),
     checkpoint=dict(type='CheckpointHook', interval=1))
-del _base_.custom_hooks
 find_unused_parameters = True

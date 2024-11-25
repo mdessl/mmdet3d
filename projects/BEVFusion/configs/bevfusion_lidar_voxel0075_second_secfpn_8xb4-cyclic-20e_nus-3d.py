@@ -267,7 +267,7 @@ test_pipeline = [
 ]
 
 train_dataloader = dict(
-    batch_size=2,
+    batch_size=1,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(type='DefaultSampler', shuffle=True),
@@ -365,12 +365,12 @@ param_scheduler = [
 train_cfg = dict(by_epoch=True, max_epochs=20, val_interval=5)
 val_cfg = dict()
 test_cfg = dict()
-
+"""
 optim_wrapper = dict(
     type='OptimWrapper',
     optimizer=dict(type='AdamW', lr=lr, weight_decay=0.01),
     clip_grad=dict(max_norm=35, norm_type=2))
-
+"""
 # Default setting for scaling LR automatically
 #   - `enable` means enable scaling LR automatically
 #       or not by default.
