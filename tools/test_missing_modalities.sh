@@ -7,7 +7,7 @@ CFG_OPTIONS="$@"  # Capture remaining arguments
 
 # Array of ratios to test
 RATIOS=(1.0) #0.0 0.1 0.3 0.5 0.7 0.9 
-MODALITIES=("lidar") # "camera" "lidar" 
+MODALITIES=("camera") # "camera" "lidar" 
 
 # Create a timestamp for unique output directory
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
