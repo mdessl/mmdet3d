@@ -6,8 +6,8 @@ GPUS=$3
 CFG_OPTIONS="$@"  # Capture remaining arguments
 
 # Array of ratios to test
-RATIOS=(0.0 0.5 1.0) #0.0 0.1 0.3 0.5 0.7 0.9 
-MODALITIES=("lidar" "camera") # "camera" "lidar" 
+RATIOS=(1.0) #0.0 0.1 0.3 0.5 0.7 0.9 
+MODALITIES=("lidar") # "camera" "lidar" 
 
 # Create a timestamp for unique output directory
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -40,9 +40,10 @@ for MODALITY in "${MODALITIES[@]}"; do
             --missing_modality ${MODALITY} \
             --missing_ratio ${RATIO} \
             --work-dir ${WORK_DIR} \
-            --cfg-options test_dataloader.dataset.metainfo.version=v1.0-mini train_dataloader.dataset.dataset.metainfo.version=v1.0-mini
             2>&1 | tee "${WORK_DIR}/test.log"
-            
+        
+        #--cfg-options test_dataloader.dataset.metainfo.version=v1.0-mini train_dataloader.dataset.dataset.metainfo.version=v1.0-mini
+
         # Wait for the test to complete before starting the next one
         wait_and_check $!
         

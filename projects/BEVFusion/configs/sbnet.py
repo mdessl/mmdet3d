@@ -230,7 +230,7 @@ test_cfg = dict()
 
 optim_wrapper = dict(
     type='OptimWrapper',
-    optimizer=dict(type='AdamW', lr=0.0002, weight_decay=0.01),
+    optimizer=dict(type='AdamW', lr=0.0001, weight_decay=0.01),
     clip_grad=dict(max_norm=35, norm_type=2))
 
 # Default setting for scaling LR automatically

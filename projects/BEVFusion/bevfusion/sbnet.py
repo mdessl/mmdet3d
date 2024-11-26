@@ -218,6 +218,7 @@ class SBNet(Base3DDetector):
         feats = None
         
 
+        import pdb; pdb.set_trace()
 
         # Process camera if images exist and are non-zero
         feats_cam = None
@@ -304,78 +305,58 @@ class SBNet(Base3DDetector):
                                 device=imgs.device if imgs is not None else points[0].device)
         
 
+        output_shape = (180, 180)
+        device = imgs.device if imgs is not None else points[0].device
         dtype = None
-        cam_feat = None
-        lidar_feat = None
+        x = torch.zeros((batch_size, 256, *output_shape), device=device)
         
         # Process camera samples
         if imgs is not None and camera_mask.any():
-                imgs = imgs[camera_mask]
-                cam_metas = [meta for meta, is_cam in zip(batch_input_metas, camera_mask) if is_cam]
-                # Prepare camera inputs for the selected samples
-                lidar2image = imgs.new_tensor(np.asarray([meta['lidar2img'] for meta in cam_metas]))
-                camera_intrinsics = imgs.new_tensor(np.array([meta['cam2img'] for meta in cam_metas]))
-                camera2lidar = imgs.new_tensor(np.asarray([meta['cam2lidar'] for meta in cam_metas]))
-                img_aug_matrix = imgs.new_tensor(np.asarray([meta.get('img_aug_matrix', np.eye(4)) 
-                                                            for meta in cam_metas]))
-                lidar_aug_matrix = imgs.new_tensor(np.asarray([meta.get('lidar_aug_matrix', np.eye(4)) 
-                                                              for meta in cam_metas]))
-                
-                # Get camera features
-                cam_indices = camera_mask.nonzero().squeeze(1).tolist()
-                cam_points = [points[i] for i in cam_indices] if points is not None else None
-                
-                cam_feat = self.extract_img_feat(
-                    imgs, cam_points, lidar2image, camera_intrinsics,
-                    camera2lidar, img_aug_matrix, lidar_aug_matrix,
-                    cam_metas
-                )
-                cam_feat = self.pts_backbone(cam_feat)
-                cam_feat = self.pts_neck(cam_feat)
-                if isinstance(cam_feat, list):
-                    cam_feat = cam_feat[0]  # Take the first feature map if it's a list
-                dtype = cam_feat.dtype
+            imgs = imgs[camera_mask]
+            cam_metas = [meta for meta, is_cam in zip(batch_input_metas, camera_mask) if is_cam]
+            # Prepare camera inputs for the selected samples
+            lidar2image = imgs.new_tensor(np.asarray([meta['lidar2img'] for meta in cam_metas]))
+            camera_intrinsics = imgs.new_tensor(np.array([meta['cam2img'] for meta in cam_metas]))
+            camera2lidar = imgs.new_tensor(np.asarray([meta['cam2lidar'] for meta in cam_metas]))
+            img_aug_matrix = imgs.new_tensor(np.asarray([meta.get('img_aug_matrix', np.eye(4)) 
+                                                        for meta in cam_metas]))
+            lidar_aug_matrix = imgs.new_tensor(np.asarray([meta.get('lidar_aug_matrix', np.eye(4)) 
+                                                        for meta in cam_metas]))
+            
+            # Get camera features
+            cam_indices = camera_mask.nonzero().squeeze(1).tolist()
+            cam_points = [points[i] for i in cam_indices] if points is not None else None
+            
+            cam_feat = self.extract_img_feat(
+                imgs, cam_points, lidar2image, camera_intrinsics,
+                camera2lidar, img_aug_matrix, lidar_aug_matrix,
+                cam_metas
+            )
+            x[camera_mask] = cam_feat
+            dtype = cam_feat.dtype
 
         # Process lidar samples
         if points is not None and lidar_mask.any():
-                lidar_indices = lidar_mask.nonzero().squeeze(1).tolist()
-                lidar_points = [points[i] for i in lidar_indices]
-                lidar_dict = {'points': lidar_points}
-                lidar_feat = self.extract_pts_feat(lidar_dict) # lidar_feat is a tensor (bs, ...)
-                lidar_feat = self.pts_backbone(lidar_feat)
-                lidar_feat = self.pts_neck(lidar_feat)
-                assert len(lidar_feat) == 1 and isinstance(lidar_feat, list)
-                lidar_feat = lidar_feat[0]  # Take the first feature map if it's a list
-                if dtype is None:
-                    dtype = lidar_feat.dtype
+            lidar_indices = lidar_mask.nonzero().squeeze(1).tolist()
+            lidar_points = [points[i] for i in lidar_indices]
+            lidar_dict = {'points': lidar_points}
+            lidar_feat = self.extract_pts_feat(lidar_dict)
+            x[lidar_mask] = lidar_feat
+            if dtype is None:
+                dtype = lidar_feat.dtype
 
         if dtype is None:
             raise ValueError("Neither camera nor lidar features were processed successfully")
-
-        output_shape = (180, 180)
-        device = imgs.device if imgs is not None else points[0].device
-        x = torch.zeros((batch_size, 512, *output_shape), device=device, dtype=dtype)
-        
-        if lidar_feat is not None:
-            x[lidar_mask] = lidar_feat
-        if cam_feat is not None:
-            x[camera_mask] = cam_feat
-        # Memory reporting and cleanup
-
-        """
-        if torch.cuda.is_available():
-            current_memory = torch.cuda.memory_allocated() / 1024**2
-            peak_memory = torch.cuda.max_memory_allocated() / 1024**2
-            print(f"\nGPU Memory Usage in extract_feat:")
-            print(f"Current Memory: {current_memory:.2f} MB")
-            print(f"Peak Memory: {peak_memory:.2f} MB")
-            print(f"Memory Change: {current_memory - initial_memory:.2f} MB")
             
-            if peak_memory > 16000:
-                print("High memory usage detected, cleaning up...")
-                torch.cuda.empty_cache()
-                gc.collect()
-        """
+        # Ensure correct dtype
+        x = x.to(dtype=dtype)
+        
+        # Process combined features through backbone and neck
+        x = self.pts_backbone(x)
+        x = self.pts_neck(x)
+        if isinstance(x, list):
+            x = x[0]  # Take the first feature map if it's a list
+
         return x
 
     def loss(self, batch_inputs_dict: Dict[str, Optional[Tensor]],
