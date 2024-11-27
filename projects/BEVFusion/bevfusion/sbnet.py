@@ -219,15 +219,19 @@ class SBNet(Base3DDetector):
         
         # Process camera if images exist and are non-zero
         feats_cam = None
-        if not batch_input_metas[0]["img_zero"]:
+        # Process camera features
+        feats_cam = None
+        process_img = not batch_input_metas[0].get("img_zero", False)
+        if process_img:
             cam_input_metas = deepcopy(batch_input_metas)
             for meta in cam_input_metas:
                 meta['sbnet_modality'] = 'img'
             feats_cam = self.extract_feat(batch_inputs_dict, cam_input_metas)
         
-        # Process lidar if points exist and are non-zero
+        # Process lidar features
         feats_lidar = None
-        if not batch_input_metas[0]["lidar_zero"]:
+        process_lidar = not batch_input_metas[0].get("lidar_zero", False)
+        if process_lidar:
             lidar_input_metas = deepcopy(batch_input_metas)
             for meta in lidar_input_metas:
                 meta['sbnet_modality'] = 'lidar'
