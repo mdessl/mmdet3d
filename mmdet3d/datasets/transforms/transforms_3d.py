@@ -436,6 +436,7 @@ class ObjectSample(BaseTransform):
                                           axis=0)
             gt_bboxes_3d = gt_bboxes_3d.new_box(
                 np.concatenate([gt_bboxes_3d.numpy(), sampled_gt_bboxes_3d]))
+            )
 
             points = self.remove_points_in_boxes(points, sampled_gt_bboxes_3d)
             # check the points dimension
@@ -1256,6 +1257,7 @@ class IndoorPatchPointSample(BaseTransform):
         points = np.concatenate([centered_coords, attributes], axis=1)
         points = point_type(
             points, points_dim=points.shape[1], attribute_dims=attribute_dims)
+        )
 
         return points
 
@@ -2710,4 +2712,37 @@ class AddMissingModality(BaseTransform):
                 points = torch.zeros_like(points)
             input_dict["inputs"]["points"] = points
             
+        return input_dict
+
+@TRANSFORMS.register_module()
+class RandomModalityDrop(BaseTransform):
+    """Randomly drops either camera or LiDAR modality by setting it to zero tensor.
+
+    Args:
+        prob (float): Probability of dropping a modality. Default: 0.1.
+    """
+
+    def __init__(self, prob: float = 0.1) -> None:
+        self.prob = prob
+
+    def transform(self, input_dict: dict) -> dict:
+        """Transform function to randomly drop modalities.
+
+        Args:
+            input_dict (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Updated result dict.
+        """
+        if random.random() < self.prob:
+            # Randomly choose which modality to drop (0: camera, 1: lidar)
+            modality_to_drop = random.randint(0, 1)
+            
+            if modality_to_drop == 0 and "img" in input_dict["inputs"]:
+                # Drop camera modality
+                input_dict["inputs"]["img"] = torch.zeros_like(input_dict["inputs"]["img"])
+            elif modality_to_drop == 1 and "points" in input_dict["inputs"]:
+                # Drop LiDAR modality
+                input_dict["inputs"]["points"] = torch.zeros_like(input_dict["inputs"]["points"])
+        
         return input_dict
