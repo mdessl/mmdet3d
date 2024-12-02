@@ -80,8 +80,7 @@ train_pipeline = [
         fixed_prob=True,
     ),
     dict(type="PointShuffle"),
-    # Add RandomModalityDrop here, after all augmentations but before packing
-    dict(type="RandomModalityDrop", prob=0.3),
+    dict(type="RandomModalityDrop", prob=0.5),
     dict(
         type="Pack3DDetInputs",
         keys=[
@@ -114,7 +113,7 @@ train_pipeline = [
         ],
     ),
 ]
-
+"""
 # Update train_dataloader to use only 20% of the data
 train_dataloader = dict(
     dataset=dict(dataset=dict(pipeline=train_pipeline)),
@@ -124,3 +123,5 @@ train_dataloader = dict(
         seed=0,  # Set a fixed seed for reproducibility
     ),
 )
+"""
+find_unused_parameters = True

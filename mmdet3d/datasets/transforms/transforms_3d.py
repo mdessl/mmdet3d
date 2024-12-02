@@ -436,7 +436,8 @@ class ObjectSample(BaseTransform):
                                           axis=0)
             gt_bboxes_3d = gt_bboxes_3d.new_box(
                 np.concatenate([gt_bboxes_3d.numpy(), sampled_gt_bboxes_3d]))
-            )
+            gt_bboxes_3d = gt_bboxes_3d.new_box(
+                np.concatenate([gt_bboxes_3d.numpy(), sampled_gt_bboxes_3d]))
 
             points = self.remove_points_in_boxes(points, sampled_gt_bboxes_3d)
             # check the points dimension
@@ -835,6 +836,18 @@ class PointShuffle(BaseTransform):
         if pts_semantic_mask is not None:
             input_dict['pts_semantic_mask'] = pts_semantic_mask[idx]
 
+        """
+        if random.random() < 0.5:
+            modality_to_drop = random.randint(0, 1)
+            
+            if modality_to_drop == 0 and "img" in input_dict:
+                imgs = [torch.from_numpy(img) for img in input_dict["img"]]
+                imgs = [torch.zeros_like(img, dtype=torch.uint8) for img in imgs]
+                input_dict["img"] = [img.numpy() for img in imgs]            
+            elif modality_to_drop == 1 and "points" in input_dict:
+                # Instead of completely zeroing, keep a minimal set of points
+                input_dict["points"].tensor = torch.zeros_like(input_dict["points"].tensor)
+        """
         return input_dict
 
     def __repr__(self) -> str:
@@ -1257,7 +1270,6 @@ class IndoorPatchPointSample(BaseTransform):
         points = np.concatenate([centered_coords, attributes], axis=1)
         points = point_type(
             points, points_dim=points.shape[1], attribute_dims=attribute_dims)
-        )
 
         return points
 
@@ -2714,35 +2726,42 @@ class AddMissingModality(BaseTransform):
             
         return input_dict
 
+        
 @TRANSFORMS.register_module()
 class RandomModalityDrop(BaseTransform):
-    """Randomly drops either camera or LiDAR modality by setting it to zero tensor.
-
-    Args:
-        prob (float): Probability of dropping a modality. Default: 0.1.
-    """
+    """Randomly drops either camera or LiDAR modality by setting it to zero tensor."""
 
     def __init__(self, prob: float = 0.1) -> None:
+        print("Initializing RandomModalityDrop with prob:", prob)  # Check if class is being instantiated
         self.prob = prob
 
     def transform(self, input_dict: dict) -> dict:
-        """Transform function to randomly drop modalities.
-
-        Args:
-            input_dict (dict): Result dict from loading pipeline.
-
-        Returns:
-            dict: Updated result dict.
-        """
-        if random.random() < self.prob:
-            # Randomly choose which modality to drop (0: camera, 1: lidar)
-            modality_to_drop = random.randint(0, 1)
-            
-            if modality_to_drop == 0 and "img" in input_dict["inputs"]:
-                # Drop camera modality
-                input_dict["inputs"]["img"] = torch.zeros_like(input_dict["inputs"]["img"])
-            elif modality_to_drop == 1 and "points" in input_dict["inputs"]:
-                # Drop LiDAR modality
-                input_dict["inputs"]["points"] = torch.zeros_like(input_dict["inputs"]["points"])
+        """Transform function to randomly drop modalities."""
+        print("\n=== RandomModalityDrop transform called ===")
+        print("Input dict keys:", input_dict.keys())
         
+        if "img" in input_dict:
+            print("Image shape:", input_dict["img"].shape)
+            print("Image sum:", input_dict["img"].sum().item())
+        if "points" in input_dict:
+            print("Points shape:", input_dict["points"].shape)
+            print("Points sum:", input_dict["points"].sum().item())
+            
+        if random.random() < self.prob:
+            modality_to_drop = random.randint(0, 1)
+            print(f"Dropping modality {modality_to_drop} (0=img, 1=points)")
+            
+            if modality_to_drop == 0 and "img" in input_dict:
+                input_dict["img"] = torch.zeros_like(input_dict["img"])
+                print("After dropping camera - img sum:", input_dict["img"].sum().item())
+            elif modality_to_drop == 1 and "points" in input_dict:
+                input_dict["points"] = torch.zeros_like(input_dict["points"])
+                print("After dropping lidar - points sum:", input_dict["points"].sum().item())
+        else:
+            print("No modality dropped this time")
+            
+        print("=== RandomModalityDrop transform finished ===\n")
         return input_dict
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(prob={self.prob})"

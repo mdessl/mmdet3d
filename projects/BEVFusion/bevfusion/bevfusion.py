@@ -165,10 +165,19 @@ class BEVFusion(Base3DDetector):
 
     def extract_pts_feat(self, batch_inputs_dict) -> torch.Tensor:
         points = batch_inputs_dict['points']
+        #print(self.pts_middle_encoder)
+        # Check if points are empty or zeroed
+        if all(p.sum().item() == 0 for p in points):
+            # Return zero tensor with correct shape for fusion
+            x = torch.zeros((len(points), 256, 
+                              180, 180), 
+                             device=points[0].device)
+            return x
         with torch.autocast('cuda', enabled=False):
             points = [point.float() for point in points]
             feats, coords, sizes = self.voxelize(points)
             batch_size = coords[-1, 0] + 1
+
         x = self.pts_middle_encoder(feats, coords, batch_size)
         return x
 
@@ -248,6 +257,22 @@ class BEVFusion(Base3DDetector):
         points = batch_inputs_dict.get('points', None)
 
         features = []
+        
+        # Random modality dropping
+        import random
+        if False:#if random.random() < 0.5:
+            modality_to_drop = random.randint(0, 1)
+            #print(f"Dropping modality {modality_to_drop} (0=img, 1=points)")
+            
+            if modality_to_drop == 0 and imgs is not None:
+                # Zero out images
+                imgs = torch.zeros_like(imgs).cuda()
+                
+            elif modality_to_drop == 1 and points is not None:
+                # Zero out points
+                for i in range(len(points)):
+                    points[i] = torch.zeros_like(points[i])
+        
         if imgs is not None:
             imgs = imgs.contiguous()
             lidar2image, camera_intrinsics, camera2lidar = [], [], []
@@ -257,20 +282,24 @@ class BEVFusion(Base3DDetector):
                 camera_intrinsics.append(meta['cam2img'])
                 camera2lidar.append(meta['cam2lidar'])
                 img_aug_matrix.append(meta.get('img_aug_matrix', np.eye(4)))
-                lidar_aug_matrix.append(
-                    meta.get('lidar_aug_matrix', np.eye(4)))
+                lidar_aug_matrix.append(meta.get('lidar_aug_matrix', np.eye(4)))
 
-            lidar2image = imgs.new_tensor(np.asarray(lidar2image))
-            camera_intrinsics = imgs.new_tensor(np.array(camera_intrinsics))
-            camera2lidar = imgs.new_tensor(np.asarray(camera2lidar))
-            img_aug_matrix = imgs.new_tensor(np.asarray(img_aug_matrix))
-            lidar_aug_matrix = imgs.new_tensor(np.asarray(lidar_aug_matrix))
+            lidar2image = imgs[0].new_tensor(np.asarray(lidar2image))
+            camera_intrinsics = imgs[0].new_tensor(np.array(camera_intrinsics))
+            camera2lidar = imgs[0].new_tensor(np.asarray(camera2lidar))
+            img_aug_matrix = imgs[0].new_tensor(np.asarray(img_aug_matrix))
+            lidar_aug_matrix = imgs[0].new_tensor(np.asarray(lidar_aug_matrix))
             img_feature = self.extract_img_feat(imgs, deepcopy(points),
                                                 lidar2image, camera_intrinsics,
                                                 camera2lidar, img_aug_matrix,
                                                 lidar_aug_matrix,
                                                 batch_input_metas)
             features.append(img_feature)
+        
+        if points is not None:
+            points_sum = sum(p.sum().item() for p in points)
+            #print(f"Points tensor sum: {points_sum}")
+        
         pts_feature = self.extract_pts_feat(batch_inputs_dict)
         features.append(pts_feature)
         #import pdb; pdb.set_trace()
