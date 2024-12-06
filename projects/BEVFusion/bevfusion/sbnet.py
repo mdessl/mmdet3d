@@ -173,7 +173,7 @@ class SBNet(Base3DDetector):
                 lidar_aug_matrix,
                 img_metas,
             )
-            x = self.view_transform_channel_adj(x)
+            #x = self.view_transform_channel_adj(x)
 
         return x
 
