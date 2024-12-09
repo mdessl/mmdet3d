@@ -40,9 +40,10 @@ for MODALITY in "${MODALITIES[@]}"; do
             --missing_modality ${MODALITY} \
             --missing_ratio ${RATIO} \
             --work-dir ${WORK_DIR} \
-            --cfg-options test_dataloader.dataset.metainfo.version=v1.0-mini train_dataloader.dataset.dataset.metainfo.version=v1.0-mini
             2>&1 | tee "${WORK_DIR}/test.log"
-            
+        
+        #--cfg-options test_dataloader.dataset.metainfo.version=v1.0-mini train_dataloader.dataset.dataset.metainfo.version=v1.0-mini
+
         # Wait for the test to complete before starting the next one
         wait_and_check $!
         

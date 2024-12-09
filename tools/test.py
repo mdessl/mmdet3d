@@ -141,11 +141,10 @@ def main():
         assert 'tta_pipeline' in cfg, 'Cannot find ``tta_pipeline`` in config.'
         cfg.test_dataloader.dataset.pipeline = cfg.tta_pipeline
         cfg.model = ConfigDict(**cfg.tta_model, module=cfg.model)
-    
     # Add missing modality transform if specified
     if args.missing_modality != 'none':
         cfg.test_dataloader.dataset.pipeline.insert(
-            9,
+            5,
             dict(
                 type='AddMissingModality',
                 zero_ratio=args.missing_ratio,
