@@ -247,6 +247,9 @@ class BEVFusion(Base3DDetector):
         points = batch_inputs_dict.get('points', None)
         features = []
         if imgs is not None:
+            import random
+            if random.random() < 0.03:
+                imgs = torch.zeros_like(imgs).cuda()
             imgs = imgs.contiguous()
             lidar2image, camera_intrinsics, camera2lidar = [], [], []
             img_aug_matrix, lidar_aug_matrix = [], []
