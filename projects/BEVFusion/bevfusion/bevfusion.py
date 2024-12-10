@@ -8,6 +8,7 @@ import torch.distributed as dist
 from mmengine.utils import is_list_of
 from torch import Tensor
 from torch.nn import functional as F
+import random
 
 from mmdet3d.models import Base3DDetector
 from mmdet3d.registry import MODELS
@@ -247,9 +248,8 @@ class BEVFusion(Base3DDetector):
         points = batch_inputs_dict.get('points', None)
         features = []
         if imgs is not None:
-            import random
             if random.random() < 0.03:
-                imgs = torch.zeros_like(imgs).cuda()
+                imgs.zero_()
             imgs = imgs.contiguous()
             lidar2image, camera_intrinsics, camera2lidar = [], [], []
             img_aug_matrix, lidar_aug_matrix = [], []
