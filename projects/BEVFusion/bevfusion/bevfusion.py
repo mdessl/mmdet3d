@@ -250,6 +250,7 @@ class BEVFusion(Base3DDetector):
         if imgs is not None:
             if random.random() < 0.03:
                 imgs.zero_()
+                print(imgs.sum())
             imgs = imgs.contiguous()
             lidar2image, camera_intrinsics, camera2lidar = [], [], []
             img_aug_matrix, lidar_aug_matrix = [], []
