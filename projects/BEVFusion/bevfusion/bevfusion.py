@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from copy import deepcopy
 from typing import Dict, List, Optional, Tuple
-
+import random
 import numpy as np
 import torch
 import torch.distributed as dist
@@ -248,9 +248,7 @@ class BEVFusion(Base3DDetector):
         points = batch_inputs_dict.get('points', None)
         features = []
         if imgs is not None:
-            if random.random() < 0.03:
-                imgs.zero_()
-                print(imgs.sum())
+
             imgs = imgs.contiguous()
             lidar2image, camera_intrinsics, camera2lidar = [], [], []
             img_aug_matrix, lidar_aug_matrix = [], []
@@ -275,6 +273,9 @@ class BEVFusion(Base3DDetector):
             features.append(img_feature)
         pts_feature = self.extract_pts_feat(batch_inputs_dict)
         features.append(pts_feature)
+        if random.random() < 0.05:
+            pts_feature.zero_()
+            print(pts_feature.sum())
 
         if self.fusion_layer is not None:
             x = self.fusion_layer(features)
