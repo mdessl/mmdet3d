@@ -70,7 +70,6 @@ def add_location_to_nuscenes_infos(
     mmengine.dump(data, save_path)
     print(f"Successfully saved updated info file to {save_path}")
 
-
 def parse_args():
     parser = argparse.ArgumentParser(description='Add location to NuScenes info file')
     parser.add_argument(
