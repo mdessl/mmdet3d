@@ -10,13 +10,13 @@ from .transforms_3d import (BEVFusionGlobalRotScaleTrans,
 from .transfusion_head import ConvFuser, TransFusionHead
 from .utils import (BBoxBEVL1Cost, HeuristicAssigner3D, HungarianAssigner3D,
                     IoU3DCost)
-#from .samplers import GroupSampler
-#, 'GroupSampler'
+from .samplers import AlternatingSampler
+
 __all__ = [
     'BEVFusion', 'TransFusionHead', 'ConvFuser', 'ImageAug3D', 'GridMask',
     'GeneralizedLSSFPN', 'HungarianAssigner3D', 'BBoxBEVL1Cost', 'IoU3DCost',
     'HeuristicAssigner3D', 'DepthLSSTransform', 'LSSTransform',
     'BEVLoadMultiViewImageFromFiles', 'BEVFusionSparseEncoder',
     'TransformerDecoderLayer', 'BEVFusionRandomFlip3D',
-    'BEVFusionGlobalRotScaleTrans', 'RandomModalityDrop'
+    'BEVFusionGlobalRotScaleTrans', 'RandomModalityDrop','AlternatingSampler'
 ]

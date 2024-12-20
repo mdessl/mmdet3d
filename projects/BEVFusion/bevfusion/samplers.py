@@ -1,55 +1,53 @@
 from typing import List, Optional
 import numpy as np
 from torch.utils.data import Sampler
-from mmengine.registry import SAMPLERS
+from mmengine.registry import DATA_SAMPLERS
+from mmengine.dataset import DefaultSampler
+import copy
+import torch
+from mmengine.dist import get_dist_info, sync_random_seed
 
-@SAMPLERS.register_module()
-class GroupSampler(Sampler):
-    """Sampler that ensures each batch contains samples of the same modality."""
-    
-    def __init__(self, dataset, groups: List[str], group_key: str, shuffle: bool = True):
+@DATA_SAMPLERS.register_module()
+class AlternatingSampler(Sampler):
+    def __init__(self, dataset, shuffle=True, seed=None):
+        rank, world_size = get_dist_info()
+        self.rank = rank
+        self.world_size = world_size
+        
         self.dataset = dataset
-        self.groups = groups
-        self.group_key = group_key
-        self.shuffle = shuffle
-        self.batch_size = dataset.batch_size  # Get batch size from dataset config
-        
-        # Create indices for each group
-        self.group_indices = {group: [] for group in groups}
-        for idx in range(len(dataset)):
-            group = dataset.get_data_info(idx)[group_key]
-            self.group_indices[group].append(idx)
-            
-        # Convert to numpy arrays for faster operations
-        self.group_indices = {k: np.array(v) for k, v in self.group_indices.items()}
-        
+        self.total_length = len(self.dataset.dataset)
+        assert self.total_length % 2 == 0, "Dataset length must be even"
+        self.half_length = self.total_length // 2
+
+        # Print first few samples to verify dataset structure
+        print("\nDataset structure check:")
+        for i in range(min(5, self.half_length)):
+            print(f"Index {i}: {self.dataset.dataset[i].get('sbnet_modality', 'unknown')}")
+            print(f"Index {i + self.half_length}: {self.dataset.dataset[i + self.half_length].get('sbnet_modality', 'unknown')}")
+
     def __iter__(self):
-        if self.shuffle:
-            # Shuffle indices within each group
-            for group in self.groups:
-                np.random.shuffle(self.group_indices[group])
+        # Create strictly alternating indices
+        indices = []
+        for i in range(self.half_length):
+            indices.extend([i, i + self.half_length])
         
-        # Create batches ensuring same modality
-        all_indices = []
-        for group in self.groups:
-            indices = self.group_indices[group]
-            # Pad if necessary to make complete batches
-            if len(indices) % self.batch_size != 0:
-                pad_size = self.batch_size - (len(indices) % self.batch_size)
-                indices = np.pad(indices, (0, pad_size), mode='wrap')
-            # Add batch-sized chunks to final list
-            for i in range(0, len(indices), self.batch_size):
-                all_indices.extend(indices[i:i + self.batch_size])
-                
-        if self.shuffle:
-            # Shuffle the batches while maintaining batch integrity
-            batch_indices = np.array(all_indices).reshape(-1, self.batch_size)
-            np.random.shuffle(batch_indices)
-            all_indices = batch_indices.flatten().tolist()
+        # Handle distributed training if needed
+        if self.world_size > 1:
+            indices = indices[self.rank:self.total_length:self.world_size]
             
-        return iter(all_indices)
-    
+        print("\nFirst 10 pairs of indices:")
+        for i in range(0, min(20, len(indices)), 2):
+            if i+1 < len(indices):
+                idx1, idx2 = indices[i], indices[i+1]
+                mod1 = self.dataset.dataset[idx1].get('sbnet_modality', 'unknown')
+                mod2 = self.dataset.dataset[idx2].get('sbnet_modality', 'unknown')
+                print(f"Pair {i//2}: [{idx1}({mod1}), {idx2}({mod2})]")
+            
+        return iter(indices)
+
     def __len__(self):
-        total_samples = sum(len(indices) for indices in self.group_indices.values())
-        # Round up to nearest multiple of batch_size
-        return ((total_samples + self.batch_size - 1) // self.batch_size) * self.batch_size 
+        return self.total_length
+        
+    def set_epoch(self, epoch):
+        # Do nothing to prevent any shuffling
+        pass

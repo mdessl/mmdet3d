@@ -300,7 +300,9 @@ class SBNet(Base3DDetector):
         
         # Create modality masks for the batch
         batch_size = len(batch_input_metas)
-        
+        #import pdb; pdb.set_trace()
+        print(batch_input_metas[0].get('sample_idx'))
+        print(batch_input_metas[0].get('sbnet_modality'))
         if batch_input_metas[0].get('sbnet_modality', None) is None:
             raise ValueError("sbnet_modality not found in batch_input_metas")
 
