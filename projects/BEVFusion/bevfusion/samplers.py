@@ -9,7 +9,7 @@ from mmengine.dist import get_dist_info, sync_random_seed
 
 @DATA_SAMPLERS.register_module()
 class AlternatingSampler(Sampler):
-    def __init__(self, dataset, shuffle=True, seed=None):
+    def __init__(self, dataset, shuffle=False, seed=None):
         rank, world_size = get_dist_info()
         self.rank = rank
         self.world_size = world_size

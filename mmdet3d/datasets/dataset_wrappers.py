@@ -21,11 +21,15 @@ class CBGSDataset:
         dataset (:obj:`BaseDataset` or dict): The dataset to be class sampled.
         lazy_init (bool): Whether to load annotation during instantiation.
             Defaults to False.
+        sampling_type (str): The sampling type. Defaults to 'class_balanced'.
+        shuffle_pairs (bool): Whether to shuffle pairs. Defaults to True.
     """
 
     def __init__(self,
                  dataset: Union[BaseDataset, dict],
-                 lazy_init: bool = False) -> None:
+                 lazy_init: bool = False,
+                 sampling_type: str = 'class_balanced',
+                 shuffle_pairs: bool = True) -> None:
         self.dataset: BaseDataset
         if isinstance(dataset, dict):
             self.dataset = DATASETS.build(dataset)
@@ -36,6 +40,9 @@ class CBGSDataset:
                 'elements in datasets sequence should be config or '
                 f'`BaseDataset` instance, but got {type(dataset)}')
         self._metainfo = self.dataset.metainfo
+
+        self.sampling_type = sampling_type
+        self.shuffle_pairs = shuffle_pairs
 
         self._fully_initialized = False
         if not lazy_init:
@@ -56,8 +63,13 @@ class CBGSDataset:
             return
 
         self.dataset.full_init()
-        # Get sample_indices
-        self.sample_indices = self._get_sample_indices(self.dataset)
+        # Get sample_indices based on sampling type
+        if self.sampling_type == 'class_balanced':
+            self.sample_indices = self._get_sample_indices(self.dataset)
+        elif self.sampling_type == 'pair_ordered':
+            self.sample_indices = self._get_sample_indices_pair_ordered(self.dataset)
+        else:
+            raise ValueError(f'Unknown sampling type: {self.sampling_type}')
 
         self._fully_initialized = True
 
@@ -96,6 +108,35 @@ class CBGSDataset:
                                                int(len(cls_inds) *
                                                    ratio)).tolist()
         return sample_indices
+
+    def _get_sample_indices_pair_ordered(self, dataset: BaseDataset) -> List[int]:
+        """Load sample indices in pairs, with optional shuffling.
+
+        Args:
+            dataset (:obj:`BaseDataset`): The dataset.
+
+        Returns:
+            List[int]: List of indices arranged in pairs.
+        """
+        total_length = len(dataset)
+        assert total_length % 2 == 0, "Dataset length must be even"
+        half_length = total_length // 2
+
+        # Create pairs of indices
+        pair_indices = []
+        for i in range(half_length):
+            pair_indices.append([i, i + half_length])
+
+        # Shuffle the pairs if needed
+        if True:#self.shuffle:  # You'll need to add self.shuffle to __init__
+            np.random.shuffle(pair_indices)
+
+        # Flatten the pairs into a single list
+        indices = []
+        for pair in pair_indices:
+            indices.extend(pair)
+
+        return indices
 
     @force_full_init
     def _get_ori_dataset_idx(self, idx: int) -> int:

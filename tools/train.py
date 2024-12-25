@@ -127,7 +127,6 @@ def main():
     elif args.resume is not None:
         cfg.resume = True
         cfg.load_from = args.resume
-
     # build the runner from config
     if 'runner_type' not in cfg:
         # build the default runner
@@ -136,8 +135,8 @@ def main():
         # build customized runner from the registry
         # if 'runner_type' is set in the cfg
         runner = RUNNERS.build(cfg)
-
     # start training
+
     runner.train()
 
 
