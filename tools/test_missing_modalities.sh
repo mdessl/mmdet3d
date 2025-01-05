@@ -10,15 +10,19 @@ DEFAULT_MODALITIES=("camera")
 
 # Parse named arguments
 MODALITIES=()
+BASE_WORK_DIR=""
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --modalities)
-            # Split the comma-separated modalities into array
             IFS=',' read -ra MODALITIES <<< "$2"
             shift 2
             ;;
+        --work-dir)
+            BASE_WORK_DIR="$2"
+            shift 2
+            ;;
         *)
-            # Store other arguments
             OTHER_ARGS+=("$1")
             shift
             ;;
@@ -30,12 +34,17 @@ if [ ${#MODALITIES[@]} -eq 0 ]; then
     MODALITIES=("${DEFAULT_MODALITIES[@]}")
 fi
 
+# Use default work dir if none provided
+if [ -z "$BASE_WORK_DIR" ]; then
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    BASE_WORK_DIR="work_dirs/missing_modality_tests_${TIMESTAMP}"
+fi
+
+# Create base work directory
+mkdir -p "${BASE_WORK_DIR}"
+
 # Array of ratios to test
 RATIOS=(0.0 1.0)
-
-# Create a timestamp for unique output directory
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BASE_WORK_DIR="work_dirs/missing_modality_tests_${TIMESTAMP}"
 
 # Function to wait for a process and check its exit status
 wait_and_check() {
@@ -66,15 +75,11 @@ for MODALITY in "${MODALITIES[@]}"; do
             --work-dir ${WORK_DIR} \
             2>&1 | tee "${WORK_DIR}/test.log"
         
-        #--cfg-options test_dataloader.dataset.metainfo.version=v1.0-mini train_dataloader.dataset.dataset.metainfo.version=v1.0-mini
-
-        # Wait for the test to complete before starting the next one
         wait_and_check $!
         
         echo "Completed test for ${MODALITY} at ratio ${RATIO}"
         echo "----------------------------------------"
         
-        # Add a small delay between tests to ensure resources are freed
         sleep 2
     done
 done

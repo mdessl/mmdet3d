@@ -11,8 +11,25 @@ declare -A CONFIGS_AND_CHECKPOINTS=(
     
     # BEVFusion (test both camera and lidar corruptions)
     ["/mmdet3d/projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py:both"]="/mmdet3d/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-5239b1af.pth"
-    
 )
+
+# Function to get simplified model name
+get_model_name() {
+    local config_path=$1
+    local basename=$(basename ${config_path%.*})
+    
+    case "$basename" in
+        "sbnet_256")
+            echo "sbnet"
+            ;;
+        "bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d")
+            echo "bevfusion"
+            ;;
+        *)
+            echo "$basename"
+            ;;
+    esac
+}
 
 # Exit on error
 set -e
@@ -146,7 +163,6 @@ for corrupt_dir in "${corrupt_dirs[@]}"; do
         version=$(basename "$version_dir")
         echo "Processing version ${version} for corruption type ${corruption_type}..."
         
-        # Detect modality type
         modality=$(detect_modality "$version_dir")
         echo "Detected modality: ${modality}"
         
@@ -155,32 +171,21 @@ for corrupt_dir in "${corrupt_dirs[@]}"; do
             continue
         fi
 
-        # Link the detected modality
         link_modality "$version_dir" "$modality"
 
-        # Run tests for each config+checkpoint pair
         for config_with_modality in "${!CONFIGS_AND_CHECKPOINTS[@]}"; do
-            # Split config path and test modality
             config="${config_with_modality%:*}"
             test_modality="${config_with_modality#*:}"
             checkpoint="${CONFIGS_AND_CHECKPOINTS[$config_with_modality]}"
             
             # Skip if current modality doesn't match what we want to test
             case "$test_modality" in
-                "both")
-                    # Test all modalities
-                    ;;
+                "both") ;;
                 "camera")
-                    # Only test when lidar is corrupted
-                    if [ "$modality" != "lidar" ]; then
-                        continue
-                    fi
+                    if [ "$modality" != "lidar" ]; then continue; fi
                     ;;
                 "lidar")
-                    # Only test when camera is corrupted
-                    if [ "$modality" != "camera" ]; then
-                        continue
-                    fi
+                    if [ "$modality" != "camera" ]; then continue; fi
                     ;;
                 *)
                     echo "Unknown test modality: ${test_modality}"
@@ -188,16 +193,26 @@ for corrupt_dir in "${corrupt_dirs[@]}"; do
                     ;;
             esac
             
+            model_name=$(get_model_name "$config")
+            work_dir="work_dirs/${corruption_type}_sev${version}_${model_name}"
+            
             echo "Running test for corruption type ${corruption_type}, version ${version}"
             echo "Using config: ${config}"
             echo "Using checkpoint: ${checkpoint}"
             echo "Testing modality: ${test_modality}"
+            echo "Output directory: ${work_dir}"
             
-            if ! bash tools/test_missing_modalities.sh "${config}" "${checkpoint}" 1; then
+            if ! bash tools/test_missing_modalities.sh \
+                "${config}" \
+                "${checkpoint}" \
+                1 \
+                --work-dir "${work_dir}" \
+                2>&1 | tee "${work_dir}/test.log"; then
                 echo "Test failed for corruption type ${corruption_type}, version ${version}"
                 echo "With config: ${config}"
                 continue
             fi
+
         done
     done
 done
