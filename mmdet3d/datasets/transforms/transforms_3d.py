@@ -2714,21 +2714,24 @@ class AddMissingModality(BaseTransform):
         input_dict["img_zero"] = False
         input_dict["lidar_zero"] = False
         if self.zero_modality == "camera":
-            img = input_dict["img"]
+            imgs = input_dict["img"]
+            new_imgs = []
             if random.random() < self.zero_ratio:
-                #img = torch.zeros_like(img)
+                for img in imgs:
+                    img = np.zeros_like(img)
+                    new_imgs.append(img)
+                input_dict["img"] = new_imgs
                 input_dict["img_zero"] = True
-            input_dict["img"] = img
+
         elif self.zero_modality == "lidar":
             points = input_dict["points"]
             if random.random() < self.zero_ratio:
-                #points = torch.zeros_like(points)
-                input_dict["lidar_zero"] = True
+                points.tensor = torch.zeros_like(points.tensor)
             input_dict["points"] = points
-            
+            input_dict["lidar_zero"] = True
+        
         return input_dict
 
-        
 @TRANSFORMS.register_module()
 class RandomModalityDrop(BaseTransform):
     """Randomly drops either camera or LiDAR modality by setting it to zero tensor."""

@@ -3,11 +3,35 @@
 CONFIG=$1
 CHECKPOINT=$2
 GPUS=$3
-CFG_OPTIONS="$@"  # Capture remaining arguments
+shift 3  # Remove first 3 arguments
+
+# Default modalities
+DEFAULT_MODALITIES=("camera")
+
+# Parse named arguments
+MODALITIES=()
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --modalities)
+            # Split the comma-separated modalities into array
+            IFS=',' read -ra MODALITIES <<< "$2"
+            shift 2
+            ;;
+        *)
+            # Store other arguments
+            OTHER_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Use default modalities if none provided
+if [ ${#MODALITIES[@]} -eq 0 ]; then
+    MODALITIES=("${DEFAULT_MODALITIES[@]}")
+fi
 
 # Array of ratios to test
-RATIOS=(1.0) #0.0 0.1 0.3 0.5 0.7 0.9 
-MODALITIES=("lidar" "camera") # "camera" "lidar" 
+RATIOS=(0.0 1.0)
 
 # Create a timestamp for unique output directory
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
