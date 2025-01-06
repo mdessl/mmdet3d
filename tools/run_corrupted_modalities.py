@@ -12,7 +12,7 @@ CONFIGS_AND_CHECKPOINTS = {
         "sbnet"
     ),
     "/mmdet3d/projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py": (
-        "/mmdet3d/data/nuscenes/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-5239b1af.pth",
+        "/mmdet3d//bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-5239b1af.pth",
         "bevfusion"
     ),
 }

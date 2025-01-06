@@ -6,7 +6,7 @@ GPUS=$3
 shift 3  # Remove first 3 arguments
 
 # Default modalities
-DEFAULT_MODALITIES=("camera")
+DEFAULT_MODALITIES=("lidar")
 
 # Parse named arguments
 MODALITIES=()
@@ -44,7 +44,7 @@ fi
 mkdir -p "${BASE_WORK_DIR}"
 
 # Array of ratios to test
-RATIOS=(0.0 1.0)
+RATIOS=(1.0)
 
 # Function to wait for a process and check its exit status
 wait_and_check() {
