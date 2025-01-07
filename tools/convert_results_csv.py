@@ -132,53 +132,103 @@ class MetricsCollector:
 
     def create_sensor_comparison(self, raw_data: Dict[str, Dict[str, float]]) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Create DataFrames comparing sensor+model combinations (rows) vs corruptions (columns)"""
-        sensor_models = set()
-        corruptions = set()
+        models = ["bevfusion", "sbnet"]
+        sensor_mapping = {
+            "camera_0.0": "both modalities",
+            "camera_1.0": "camera 100% removed",
+            "lidar_1.0": "lidar 100% removed"
+        }
+        
+        # Initialize metrics dictionaries
         metrics = {"mAP": {}, "NDS": {}}
-
-        # Extract all combinations and corruptions
+        
+        # Extract corruptions correctly
+        corruptions = set()
         for key in raw_data.keys():
-            model, sensor, corruption = key.split("_", 2)
-            sensor_models.add(f"{sensor}_{model}")
+            # Example key: bevfusion_camera_0.0_beamsreducing_sev1
+            parts = key.split('_')
+            # Join the corruption parts (everything after sensor)
+            corruption = '_'.join(parts[3:])
             corruptions.add(corruption)
         
-        sensor_models = sorted(list(sensor_models))  # Sort for consistent ordering
-        corruptions = sorted(list(corruptions))      # Sort for consistent ordering
+        corruptions = sorted(list(corruptions))
+        print(f"Found corruptions: {corruptions}")
+        
+        # For each sensor-model combination
+        for internal_sensor, display_name in sensor_mapping.items():
+            for model in models:
+                row_name = f"{display_name} ({model})"
+                metrics["mAP"][row_name] = {}
+                metrics["NDS"][row_name] = {}
+                
+                # For each corruption
+                for corruption in corruptions:
+                    key = f"{model}_{internal_sensor}_{corruption}"
+                    if key in raw_data:
+                        metrics["mAP"][row_name][corruption] = raw_data[key]["mAP"]
+                        metrics["NDS"][row_name][corruption] = raw_data[key]["NDS"]
+                    else:
+                        # Fill with NaN for missing data
+                        metrics["mAP"][row_name][corruption] = float('nan')
+                        metrics["NDS"][row_name][corruption] = float('nan')
 
-        # Organize data
-        for sensor_model in sensor_models:
-            metrics["mAP"][sensor_model] = {}
-            metrics["NDS"][sensor_model] = {}
-            model = sensor_model.split("_")[1]
-            sensor = sensor_model.split("_")[0]
-            
-            for corruption in corruptions:
-                key = f"{model}_{sensor}_{corruption}"
-                if key in raw_data:
-                    metrics["mAP"][sensor_model][corruption] = raw_data[key]["mAP"]
-                    metrics["NDS"][sensor_model][corruption] = raw_data[key]["NDS"]
-
-        return pd.DataFrame.from_dict(metrics["mAP"]).T, pd.DataFrame.from_dict(metrics["NDS"]).T
+        # Convert to DataFrames
+        map_df = pd.DataFrame.from_dict(metrics["mAP"], orient='index')
+        nds_df = pd.DataFrame.from_dict(metrics["NDS"], orient='index')
+        
+        # Clean up column names
+        map_df.columns = [col.replace('_sev', ' S') for col in map_df.columns]
+        nds_df.columns = [col.replace('_sev', ' S') for col in nds_df.columns]
+        
+        print("\nCreated DataFrames with shapes:")
+        print(f"mAP: {map_df.shape}")
+        print(f"NDS: {nds_df.shape}")
+        print("\nColumns:", map_df.columns.tolist())
+        print("\nIndex:", map_df.index.tolist())
+        
+        return map_df, nds_df
 
 def format_for_output(df: pd.DataFrame, metric_name: str, output_dir: Path, prefix: str = "") -> None:
-    """Format DataFrame for LaTeX and presentation-friendly output"""
+    """Format DataFrame for output"""
+    if df.empty:
+        print(f"Warning: Empty DataFrame for {metric_name}")
+        return
+        
     # Clean up column names
     df.columns = [col.replace('_sev', ' S').replace('_', ' ') for col in df.columns]
     df = df.round(3)
     
+    # Create output directory if it doesn't exist
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
     # Save different formats
     base_name = f"{prefix}_{metric_name.lower()}" if prefix else f"metrics_{metric_name.lower()}"
     
+    # Save CSV
     df.to_csv(output_dir / f"{base_name}.csv")
     
-    latex_str = df.to_latex(float_format="%.3f")
+    # Save LaTeX with thick lines after pairs
+    latex_lines = df.to_latex(
+        float_format="%.3f",
+        column_format='l' + 'r' * len(df.columns),
+        escape=False
+    ).split('\n')
+    
+    modified_lines = []
+    for i, line in enumerate(latex_lines):
+        modified_lines.append(line)
+        if line.strip().startswith('both modalities (sbnet)') or \
+           line.strip().startswith('camera 100\\% removed (sbnet)'):
+            modified_lines.append('\\midrule[1pt]')
+    
     with open(output_dir / f"{base_name}.tex", 'w') as f:
-        f.write(latex_str)
+        f.write('\n'.join(modified_lines))
     
-    markdown_str = df.to_markdown(floatfmt=".3f")
+    # Save Markdown
     with open(output_dir / f"{base_name}.md", 'w') as f:
-        f.write(markdown_str)
+        f.write(df.to_markdown(floatfmt=".3f"))
     
+    # Print to console
     print(f"\n{prefix} {metric_name} Metrics:")
     print(df.to_string(float_format=lambda x: '{:.3f}'.format(x)))
 
