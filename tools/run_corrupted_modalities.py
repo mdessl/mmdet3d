@@ -3,6 +3,10 @@ from pathlib import Path
 import shutil
 import os
 
+class InvalidCorruptionError(Exception):
+    """Raised when an invalid corruption type is encountered."""
+    pass
+
 MULTICORRUPT_DIR = "/MultiCorrupt/multicorrupt"
 TARGET_DIR = "/mmdet3d/data/nuscenes"
 
@@ -16,6 +20,16 @@ CONFIGS_AND_CHECKPOINTS = {
         "bevfusion"
     ),
 }
+
+CORRUPTION_TO_MODALITY = {
+    'fog': ['lidar', 'camera'],
+    'motionblur': ['lidar', 'camera'],
+    'dark': ['lidar', 'camera'],
+    'brightness': ['lidar', 'camera'],
+    'beamsreducing': ['lidar', 'camera'],
+    'pointsreducing': ['lidar', 'camera']
+}
+
 @contextmanager
 def directory_link_manager(src_dir: str, target_dir: str):
     """Safely manage directory symlinks with backups."""
@@ -66,7 +80,7 @@ def directory_link_manager(src_dir: str, target_dir: str):
             if backup_dir.exists():
                 shutil.move(backup_dir, target)
 
-def run_test(config: str, checkpoint: str, gpus: int = 1, work_dir: str = None):
+def run_test(config: str, checkpoint: str, gpus: int = 1, work_dir: str = None, modalities: list = None):
     """Run corruption test using the test_corrupted_modalities.sh script."""
     import subprocess
     
@@ -85,36 +99,64 @@ def run_test(config: str, checkpoint: str, gpus: int = 1, work_dir: str = None):
     if work_dir:
         cmd.extend(["--work-dir", work_dir])
     
+    if modalities:
+        # Join modalities with commas instead of spaces
+        cmd.extend(["--modalities", ",".join(modalities)])
     try:
-        # Always show output in terminal
         process = subprocess.run(
             cmd,
             check=True,
             text=True
         )
-        
- 
         return True
             
     except subprocess.CalledProcessError:
         return False
 
+def validate_corruptions():
+    """Validate that all corruption directories are valid before starting tests."""
+    invalid_dirs = []
+    valid_dirs = []
+    
+    for corrupt_dir in Path(MULTICORRUPT_DIR).iterdir():
+        if not corrupt_dir.is_dir():
+            continue
+            
+        if corrupt_dir.name not in CORRUPTION_TO_MODALITY:
+            invalid_dirs.append(corrupt_dir.name)
+        else:
+            valid_dirs.append(corrupt_dir.name)
+    
+    if invalid_dirs:
+        raise InvalidCorruptionError(
+            f"Found invalid corruption directories: {invalid_dirs}\n"
+            f"Valid corruptions are: {list(CORRUPTION_TO_MODALITY.keys())}"
+        )
+    
+    return valid_dirs
+
 def main():
+    # Validate corruptions before starting any tests
+    valid_corruptions = validate_corruptions()
+    print(f"Found valid corruption directories: {valid_corruptions}")
+    
     # Process each corruption directory
     for corrupt_dir in Path(MULTICORRUPT_DIR).iterdir():
         if not corrupt_dir.is_dir():
             continue
             
+        modalities = CORRUPTION_TO_MODALITY[corrupt_dir.name]
+        
         # Process each severity version
         for version_dir in sorted([d for d in corrupt_dir.iterdir() if d.name.isdigit()]):
-            print(f"Testing {corrupt_dir.name} version {version_dir.name}")
+            print(f"Testing {corrupt_dir.name} version {version_dir.name} for modalities: {modalities}")
             
             # Run tests with managed data state
             with directory_link_manager(str(version_dir), TARGET_DIR):
                 for config, (checkpoint, model_name) in CONFIGS_AND_CHECKPOINTS.items():
                     work_dir = f"work_dirs/{model_name}/{corrupt_dir.name}_sev{version_dir.name}"
-                    print("done storing with sys linking")
-                    run_test(config, checkpoint, work_dir=work_dir)
+                    print(f"Running test with modalities: {modalities}")
+                    run_test(config, checkpoint, work_dir=work_dir, modalities=modalities)
 
 if __name__ == "__main__":
     main()
