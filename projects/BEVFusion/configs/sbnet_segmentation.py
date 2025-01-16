@@ -1,5 +1,5 @@
 _base_ = [
-    './bevfusion_lidar_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py'
+    './segmentation_lidar_base.py.py'
 ]
 point_cloud_range = [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
 input_modality = dict(use_lidar=True, use_camera=True)
@@ -53,7 +53,7 @@ model = dict(
         act_cfg=dict(type='ReLU', inplace=True),
         upsample_cfg=dict(mode='bilinear', align_corners=False)),
     view_transform=dict(
-        type='DepthLSSTransform',
+        type='LSSTransform',
         in_channels=256,
         out_channels=256,
         image_size=[256, 704],
