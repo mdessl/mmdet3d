@@ -11,6 +11,7 @@ DEFAULT_MODALITIES=("lidar")
 # Parse named arguments
 MODALITIES=()
 BASE_WORK_DIR=""
+RATIOS=(1.0)  # Default ratios
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -20,6 +21,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --work-dir)
             BASE_WORK_DIR="$2"
+            shift 2
+            ;;
+        --ratios)
+            IFS=',' read -ra RATIOS <<< "$2"
             shift 2
             ;;
         *)
@@ -43,9 +48,6 @@ fi
 # Create base work directory
 mkdir -p "${BASE_WORK_DIR}"
 
-# Array of ratios to test
-RATIOS=(1.0 0.0)
-
 # Function to wait for a process and check its exit status
 wait_and_check() {
     local pid=$1
@@ -57,17 +59,10 @@ wait_and_check() {
     fi
 }
 
-# Counter for 0.0 ratio tests
-zero_ratio_done=false
 echo "${MODALITIES[@]}"
 
 for MODALITY in "${MODALITIES[@]}"; do
     for RATIO in "${RATIOS[@]}"; do
-        # Skip 0.0 ratio if it's not the first modality
-        if [ "$RATIO" = "0.0" ] && [ "$zero_ratio_done" = true ]; then
-            continue
-        fi
-        
         echo "Testing with missing ${MODALITY} at ratio ${RATIO}"
         
         # Create specific work directory for this test
@@ -85,11 +80,6 @@ for MODALITY in "${MODALITIES[@]}"; do
             2>&1 | tee "${WORK_DIR}/test.log"
         
         wait_and_check $!
-        
-        # Mark zero ratio as done after first occurrence
-        if [ "$RATIO" = "0.0" ]; then
-            zero_ratio_done=true
-        fi
         
         echo "Completed test for ${MODALITY} at ratio ${RATIO}"
         echo "----------------------------------------"

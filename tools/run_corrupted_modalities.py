@@ -10,13 +10,16 @@ class InvalidCorruptionError(Exception):
 MULTICORRUPT_DIR = "/MultiCorrupt/multicorrupt"
 TARGET_DIR = "/mmdet3d/data/nuscenes"
 
-CONFIGS_AND_CHECKPOINTS = {
+"""
     "/mmdet3d/projects/BEVFusion/configs/sbnet_256.py": (
         "/mmdet3d/data/nuscenes/sbnet.pth",
         "sbnet"
     ),
+"""
+CONFIGS_AND_CHECKPOINTS = {
+
     "/mmdet3d/projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py": (
-        "/mmdet3d//bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-5239b1af.pth",
+        "/mmdet3d/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d-5239b1af.pth",
         "bevfusion"
     ),
 }
@@ -26,8 +29,8 @@ CORRUPTION_TO_MODALITY = {
     'motionblur': ['lidar', 'camera'],
     'dark': ['lidar', 'camera'],
     'brightness': ['lidar', 'camera'],
-    'beamsreducing': ['lidar', 'camera'],
-    'pointsreducing': ['lidar', 'camera']
+    'beamsreducing': ['camera'],
+    'pointsreducing': ['camera']
 }
 
 @contextmanager
