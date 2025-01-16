@@ -259,6 +259,7 @@ class MetricsCollector:
             
             for idx, (corruption_base, (color, display_name)) in enumerate(config['corruptions'].items()):
                 ax = plt.subplot(n_rows, n_cols, idx + 1)
+                legend_handles = []  # Create list to store legend handles
                 
                 # First, find all possible severity levels for this corruption
                 all_severities = set()
@@ -296,17 +297,13 @@ class MetricsCollector:
                     if severities and values:
                         # Plot line with larger markers
                         linestyle = '--' if model == 'bevfusion' else '-'
-                        line = ax.plot(severities, values, color=color, linestyle=linestyle, marker='o',
-                                     label=model.capitalize(), linewidth=2.0, markersize=4)[0]
+                        ax.plot(severities, values, color=color, linestyle=linestyle, marker='o',
+                               linewidth=2.0, markersize=6)
                         
-                        # Create a separate line object for the legend with smaller markers
+                        # Create legend handle separately
                         legend_line = Line2D([0], [0], color=color, linestyle=linestyle, marker='o',
                                            label=model.capitalize(), linewidth=2.0, markersize=1)
-                        
-                        # Replace the line in the legend
-                        handles, labels = ax.get_legend_handles_labels()
-                        handles[-1] = legend_line
-                        ax.legend(handles=handles)
+                        legend_handles.append(legend_line)
                 
                 # Set x-axis ticks to show all possible severity levels
                 ax.set_xticks(all_severities)
@@ -317,7 +314,7 @@ class MetricsCollector:
                 ax.set_title(display_name)
                 ax.grid(True, alpha=0.3)
                 ax.set_ylim(0, 0.7)
-                ax.legend()
+                ax.legend(handles=legend_handles)
             
             # Adjust layout and title
             plt.tight_layout()
