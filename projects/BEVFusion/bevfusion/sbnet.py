@@ -368,9 +368,36 @@ class SBNet(Base3DDetector):
     def loss(self, batch_inputs_dict: Dict[str, Optional[Tensor]],
              batch_data_samples: List[Det3DDataSample],
              **kwargs) -> List[Det3DDataSample]:
-
+        """Network forward process and calculate loss.
+        
+        Handles three modalities via sbnet_modality:
+        1. Camera-only (img)
+        2. LiDAR-only (lidar)
+        3. Both modalities combined (both)
+        """
         batch_input_metas = [item.metainfo for item in batch_data_samples]
-        feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
+        
+        if 'sbnet_modality' not in batch_input_metas[0]:
+            raise ValueError("sbnet_modality not found in batch_input_metas")
+        
+        modality = batch_input_metas[0]['sbnet_modality']
+        
+        if modality == 'both':
+            # Process both camera and lidar features
+            cam_input_metas = deepcopy(batch_input_metas)
+            for meta in cam_input_metas:
+                meta['sbnet_modality'] = 'img'
+            feats_cam = self.extract_feat(batch_inputs_dict, cam_input_metas)
+            
+            lidar_input_metas = deepcopy(batch_input_metas)
+            for meta in lidar_input_metas:
+                meta['sbnet_modality'] = 'lidar'
+            feats_lidar = self.extract_feat(batch_inputs_dict, lidar_input_metas)
+            
+            feats = (feats_cam + feats_lidar) / 2
+        else:
+            # Process single modality (img or lidar)
+            feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
 
         losses = dict()
         if self.with_bbox_head:
