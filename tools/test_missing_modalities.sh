@@ -44,7 +44,7 @@ fi
 mkdir -p "${BASE_WORK_DIR}"
 
 # Array of ratios to test
-RATIOS=(1.0)
+RATIOS=(1.0 0.0)
 
 # Function to wait for a process and check its exit status
 wait_and_check() {
@@ -73,8 +73,9 @@ for MODALITY in "${MODALITIES[@]}"; do
             --missing_modality ${MODALITY} \
             --missing_ratio ${RATIO} \
             --work-dir ${WORK_DIR} \
+            --cfg-options test_dataloader.dataset.metainfo.version=v1.0-mini train_dataloader.dataset.dataset.metainfo.version=v1.0-mini \
             2>&1 | tee "${WORK_DIR}/test.log"
-        
+
         wait_and_check $!
         
         echo "Completed test for ${MODALITY} at ratio ${RATIO}"
@@ -83,4 +84,6 @@ for MODALITY in "${MODALITIES[@]}"; do
         sleep 2
     done
 done
+
+        bash tools/test_missing_modalities.sh projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py work_dirs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d/epoch_1.pth 1
 
