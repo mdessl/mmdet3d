@@ -70,6 +70,23 @@ class SBNet(Base3DDetector):
 
         self.bbox_head = MODELS.build(bbox_head)
 
+        # Create two separate view transforms
+        if view_transform is not None:
+            # Create LSSTransform for camera-only data
+            self.view_transform_img = MODELS.build({
+                **view_transform,
+                'type': 'LSSTransform'
+            })
+            
+            # Create DepthLSSTransform for data with lidar
+            self.view_transform_depth = MODELS.build({
+                **view_transform,
+                'type': 'DepthLSSTransform'
+            })
+        else:
+            self.view_transform_img = None
+            self.view_transform_depth = None
+
         #self.init_weights()
         #self.print_model_params()
         # freezing both encoders except for view transform (part of img encoder) bc n channels is different from pretrained bevfusion model (channels from both encoders must be the same)
@@ -163,17 +180,33 @@ class SBNet(Base3DDetector):
         x = x.view(B, int(BN / B), C, H, W)
 
         with torch.autocast(device_type='cuda', dtype=torch.float32):
-            x = self.view_transform(
-                x,
-                points,
-                lidar2image,
-                camera_intrinsics,
-                camera2lidar,
-                img_aug_matrix,
-                lidar_aug_matrix,
-                img_metas,
-            )
-            #x = self.view_transform_channel_adj(x)
+            # Check modality from img_metas
+            modality = img_metas[0].get('sbnet_modality', None)
+            if modality == 'img':
+                print(type(self.view_transform_img))
+                # Use LSSTransform when only camera data is present
+                x = self.view_transform_img(
+                    x,
+                    None,  # No points needed for LSSTransform
+                    None,  # No lidar2image needed for LSSTransform
+                    camera_intrinsics,
+                    camera2lidar,
+                    img_aug_matrix,
+                    lidar_aug_matrix,
+                    img_metas,
+                )
+            else:
+                # Use DepthLSSTransform when lidar data is present
+                x = self.view_transform(
+                    x,
+                    points,
+                    lidar2image,
+                    camera_intrinsics,
+                    camera2lidar,
+                    img_aug_matrix,
+                    lidar_aug_matrix,
+                    img_metas,
+                )
 
         return x
 
