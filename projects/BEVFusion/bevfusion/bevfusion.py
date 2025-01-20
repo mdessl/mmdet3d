@@ -268,7 +268,7 @@ class BEVFusion(Base3DDetector):
         
         # Will store two complete samples: [camera_only_sample, camera_lidar_sample]
         all_features = []
-        
+        #
         if imgs is not None:
             imgs = imgs.contiguous()
             lidar2image, camera_intrinsics, camera2lidar = [], [], []
