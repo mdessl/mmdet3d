@@ -241,9 +241,9 @@ default_hooks = dict(
     logger=dict(type='LoggerHook', interval=1),
     checkpoint=dict(
         type='CheckpointHook',
-        interval=100,  # Save every 500 iterations
+        interval=1000,  # Save every 500 iterations
         by_epoch=False,  # Change to iteration-based saving
-        max_keep_ckpts=3)  # Keep only the last 3 checkpoints to save disk space
+        max_keep_ckpts=10)  # Keep only the last 3 checkpoints to save disk space
 )
 del _base_.custom_hooks
 #find_unused_parameters = False

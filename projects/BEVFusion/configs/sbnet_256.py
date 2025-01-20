@@ -241,6 +241,12 @@ optim_wrapper = dict(
 auto_scale_lr = dict(enable=False, base_batch_size=32)
 
 default_hooks = dict(
-    logger=dict(type='LoggerHook', interval=50),
-    checkpoint=dict(type='CheckpointHook', interval=1))
+    logger=dict(type='LoggerHook', interval=1),
+    checkpoint=dict(
+        type='CheckpointHook',
+        interval=2000,  # Save every 500 iterations
+        by_epoch=False,  # Change to iteration-based saving
+        max_keep_ckpts=10)  # Keep only the last 3 checkpoints to save disk space
+)
 find_unused_parameters = True
+

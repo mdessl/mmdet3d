@@ -182,7 +182,7 @@ class SBNet(Base3DDetector):
         with torch.autocast(device_type='cuda', dtype=torch.float32):
             # Check modality from img_metas
             modality = img_metas[0].get('sbnet_modality', None)
-            if modality == 'img':
+            if False: #modality == 'img':
                 print(type(self.view_transform_img))
                 # Use LSSTransform when only camera data is present
                 x = self.view_transform_img(
@@ -365,7 +365,7 @@ class SBNet(Base3DDetector):
             # Get camera features
             cam_indices = camera_mask.nonzero().squeeze(1).tolist()
             cam_points = [points[i] for i in cam_indices] if points is not None else None
-            
+
             cam_feat = self.extract_img_feat(
                 imgs, cam_points, lidar2image, camera_intrinsics,
                 camera2lidar, img_aug_matrix, lidar_aug_matrix,
@@ -430,6 +430,9 @@ class SBNet(Base3DDetector):
             feats = (feats_cam + feats_lidar) / 2
         else:
             # Process single modality (img or lidar)
+            if modality == 'img':
+                # Set lidar points to zero tensor for camera-only processing
+                batch_inputs_dict['points'] = [torch.zeros_like(points) for points in batch_inputs_dict['points']]
             feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
 
         losses = dict()

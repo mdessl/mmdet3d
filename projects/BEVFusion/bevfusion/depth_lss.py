@@ -276,8 +276,10 @@ class BaseDepthTransform(BaseViewTransform):
         batch_size = len(points)
         depth = torch.zeros(batch_size, img.shape[1], 1,
                             *self.image_size).to(points[0].device)
-
         for b in range(batch_size):
+            if points[b].sum() == 0:
+                continue
+
             cur_coords = points[b][:, :3]
             cur_img_aug_matrix = img_aug_matrix[b]
             cur_lidar_aug_matrix = lidar_aug_matrix[b]
