@@ -41,24 +41,23 @@ model = dict(
         ),
     ),
     img_neck=dict(
-        type="GeneralizedLSSFPN",
-        in_channels=[192, 384, 768],
+        type='FPNC',
+        final_dim=(900, 1600),
+        downsample=8, 
+        in_channels=[192, 384, 768], # was: [96, 192, 384, 768
         out_channels=256,
-        start_level=0,
-        num_outs=3,
-        norm_cfg=dict(type="BN2d", requires_grad=True),
-        act_cfg=dict(type="ReLU", inplace=True),
-        upsample_cfg=dict(mode="bilinear", align_corners=False),
-    ),
+        outC=256,
+        use_adp=True,
+        num_outs=5),
     view_transform=dict(
         type="LSSNoPoints",
-        image_size=(256, 704),
-        feature_size=(32, 88),
-        xbound=[-54.0, 54.0, 0.3],
-        ybound=[-54.0, 54.0, 0.3],
-        zbound=[-10.0, 10.0, 20.0],
-        dbound=[1.0, 60.0, 0.5],
-        downsample=2,
+        image_size=(900, 1600),
+        feature_size=(112, 180),
+        xbound=[-45.0, 45.0, 0.5],
+        ybound=[-45.0, 45.0, 0.5],
+        zbound=[-5.0, 3.0, 8.0],    # [min, max, bin_size]
+        dbound=[4.0, 45.0, 1.0],    # [min, max, bin_size]
+        downsample=8,
     ),
     fusion_layer=dict(type="ConvFuser", in_channels=[256, 256], out_channels=256),
 )

@@ -8,6 +8,17 @@ from mmdet3d.registry import MODELS
 from .ops import bev_pool
 
 
+import torch
+from torch import nn
+from torchvision.models.resnet import resnet18
+import numpy as np
+import matplotlib.pyplot as plt
+import math
+import torch.nn.functional as F
+from mmdet.models.necks import FPN
+from mmcv.cnn import ConvModule
+
+
 def gen_dx_bx(xbound, ybound, zbound):
     dx = torch.Tensor([row[2] for row in [xbound, ybound, zbound]])
     bx = torch.Tensor([row[0] + row[2] / 2.0 for row in [xbound, ybound, zbound]])
@@ -445,17 +456,6 @@ Licensed under the NVIDIA Source Code License. See LICENSE at https://github.com
 Authors: Jonah Philion and Sanja Fidler
 """
 
-import torch
-from torch import nn
-from torchvision.models.resnet import resnet18
-import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-import math
-from torchvision.utils import save_image
-from mmdet3d.models.fusion_layers import apply_3d_transformation
-import torch.nn.functional as F
-
 
 class Up(nn.Module):
     def __init__(self, in_channels, out_channels, scale_factor=2):
@@ -602,7 +602,7 @@ class LiftSplatShoot(nn.Module):
         downsample=4,
         grid=3,
         inputC=256,
-        camC=64,
+        camC=256,
     ):
         """
         Args:
@@ -861,21 +861,27 @@ class LiftSplatShoot(nn.Module):
 class LSSNoPoints(nn.Module):
     def __init__(
         self,
-        grid=1,
-        num_views=6,
-        final_dim=(900, 1600),
-        pc_range=[-50, -50, -5, 50, 50, 3],
-        downsample=4,
-        imc=256,
-        **kwargs,
+        image_size,
+        feature_size,
+        xbound,
+        ybound,
+        zbound,
+        dbound,
+        downsample,
+        **kwargs
     ):
         super().__init__()
+        
+        # Convert bounds to LiftSplatShoot format
+        pc_range = [xbound[0], ybound[0], zbound[0], 
+                   xbound[1], ybound[1], zbound[1]]
+        
         self.lift_splat_shot_vis = LiftSplatShoot(
-            grid=grid,
-            inputC=imc,
-            camC=64,
+            grid=0.5,  # Match xbound/ybound resolution
+            inputC=256,  # Should match neck output channels
+            camC=256,
             pc_range=pc_range,
-            final_dim=final_dim,
+            final_dim=image_size,
             downsample=downsample,
         )
 
@@ -885,8 +891,9 @@ class LSSNoPoints(nn.Module):
         img_metas,
         img_aug_matrix=None,
         lidar_aug_matrix=None,
-        gt_bboxes_3d=None,
+        batch_size=None,
     ):
+
         rots = []
         trans = []
         for sample_idx in range(batch_size):
@@ -932,6 +939,8 @@ class LSSNoPoints(nn.Module):
             extra_trans=extra_trans,
         )
 
+
+        """
         if pts_feats is None:
             pts_feats = [img_bev_feat]  ####cam stream only
         else:
@@ -941,5 +950,82 @@ class LSSNoPoints(nn.Module):
                 ]
                 if self.se:
                     pts_feats = [self.seblock(pts_feats[0])]
-
+        """
         return img_bev_feat
+
+@MODELS.register_module()
+class FPNC(FPN):
+
+    def __init__(self,
+            conv_cfg=None,
+            norm_cfg=None,
+            act_cfg=None,
+            final_dim=(900, 1600), 
+            downsample=4, 
+            use_adp=False,
+            fuse_conv_cfg=None,
+            outC=256,
+            **kwargs):
+        super(FPNC, self).__init__(
+            conv_cfg=conv_cfg,
+            norm_cfg=norm_cfg,
+            act_cfg=act_cfg,
+            **kwargs)
+        self.target_size = (final_dim[0] // downsample, final_dim[1] // downsample)
+        self.use_adp = use_adp
+        if use_adp:
+            adp_list = []
+            for i in range(self.num_outs):
+                if i==0:
+                    resize = nn.AdaptiveAvgPool2d(self.target_size)
+                else:
+                    resize = nn.Upsample(size = self.target_size, mode='bilinear', align_corners=True)
+                adp = nn.Sequential(
+                    resize,
+                    ConvModule(
+                        self.out_channels,
+                        self.out_channels,
+                        1,
+                        padding=0,
+                        conv_cfg=fuse_conv_cfg,
+                        norm_cfg=norm_cfg,
+                        act_cfg=act_cfg,
+                        inplace=False),
+                )
+                adp_list.append(adp)
+            self.adp = nn.ModuleList(adp_list)
+
+        self.reduc_conv = ConvModule(
+                self.out_channels * self.num_outs,
+                outC,
+                3,
+                padding=1,
+                conv_cfg=fuse_conv_cfg,
+                norm_cfg=norm_cfg,
+                act_cfg=act_cfg,
+                inplace=False)
+
+    #@auto_fp16()
+    def forward(self, x):
+        print("    @auto_fp16()")
+        outs = super().forward(x)
+        if len(outs) > 1:
+            resize_outs = []
+            if self.use_adp:
+                for i in range(len(outs)):
+                    feature = self.adp[i](outs[i])
+                    resize_outs.append(feature)
+            else:
+                target_size = self.target_size
+                for i in range(len(outs)):
+                    feature = outs[i]
+                    if feature.shape[2:] != target_size:
+                        feature = F.interpolate(feature, target_size,  mode='bilinear', align_corners=True)
+                    resize_outs.append(feature)
+            out = torch.cat(resize_outs, dim=1)
+            out = self.reduc_conv(out)
+                
+
+        else:
+            out = outs[0]
+        return [out]
