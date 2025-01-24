@@ -4,8 +4,11 @@ input_modality = dict(use_lidar=True, use_camera=True)
 backend_args = None
 
 custom_imports = dict(
-    imports=["projects.BEVFusion.bevfusion", "projects.BEVFusion.bevfusion.utils"],
-    allow_failed_imports=False,
+    imports=[
+        'projects.BEVFusion.bevfusion',
+        'projects.BEVFusion.bevfusion.utils'
+    ],
+    allow_failed_imports=False
 )
 
 model = dict(

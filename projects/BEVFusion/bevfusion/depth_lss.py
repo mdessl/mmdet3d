@@ -942,4 +942,4 @@ class LSSNoPoints(nn.Module):
                 if self.se:
                     pts_feats = [self.seblock(pts_feats[0])]
 
-    return dict(img_feats=img_feats, pts_feats=pts_feats, depth_dist=depth_dist)
+        return img_bev_feat
