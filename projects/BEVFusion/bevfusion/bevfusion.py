@@ -35,35 +35,36 @@ class BEVFusion(Base3DDetector):
         seg_head: Optional[dict] = None,
         **kwargs,
     ) -> None:
-        voxelize_cfg = data_preprocessor.pop('voxelize_cfg')
-        super().__init__(
-            data_preprocessor=data_preprocessor, init_cfg=init_cfg)
+        voxelize_cfg = data_preprocessor.pop("voxelize_cfg")
+        super().__init__(data_preprocessor=data_preprocessor, init_cfg=init_cfg)
 
-        self.voxelize_reduce = voxelize_cfg.pop('voxelize_reduce')
+        self.voxelize_reduce = voxelize_cfg.pop("voxelize_reduce")
         self.pts_voxel_layer = Voxelization(**voxelize_cfg)
 
         self.pts_voxel_encoder = MODELS.build(pts_voxel_encoder)
 
-        self.img_backbone = MODELS.build(
-            img_backbone) if img_backbone is not None else None
-        self.img_neck = MODELS.build(
-            img_neck) if img_neck is not None else None
+        self.img_backbone = (
+            MODELS.build(img_backbone) if img_backbone is not None else None
+        )
+        self.img_neck = MODELS.build(img_neck) if img_neck is not None else None
         if view_transform is not None:
             # Create LSSTransform for camera-only data
-            self.view_transform_img = MODELS.build({
-                **view_transform,
-                'type': 'LSSTransform'
-            })
-            
+            self.view_transform_img = MODELS.build(
+                {**view_transform, "type": "LSSTransform"}
+            )
+
             # Create DepthLSSTransform for data with lidar
-            self.view_transform = MODELS.build(view_transform)  # This will be DepthLSSTransform
+            self.view_transform = MODELS.build(
+                view_transform
+            )  # This will be DepthLSSTransform
         else:
             self.view_transform_img = None
             self.view_transform = None
         self.pts_middle_encoder = MODELS.build(pts_middle_encoder)
 
-        self.fusion_layer = MODELS.build(
-            fusion_layer) if fusion_layer is not None else None
+        self.fusion_layer = (
+            MODELS.build(fusion_layer) if fusion_layer is not None else None
+        )
 
         self.pts_backbone = MODELS.build(pts_backbone)
         self.pts_neck = MODELS.build(pts_neck)
@@ -72,9 +73,7 @@ class BEVFusion(Base3DDetector):
 
         self.init_weights()
 
-    def _forward(self,
-                 batch_inputs: Tensor,
-                 batch_data_samples: OptSampleList = None):
+    def _forward(self, batch_inputs: Tensor, batch_data_samples: OptSampleList = None):
         """Network forward process.
 
         Usually includes backbone, neck and head forward without any post-
@@ -102,15 +101,12 @@ class BEVFusion(Base3DDetector):
             if isinstance(loss_value, torch.Tensor):
                 log_vars.append([loss_name, loss_value.mean()])
             elif is_list_of(loss_value, torch.Tensor):
-                log_vars.append(
-                    [loss_name,
-                     sum(_loss.mean() for _loss in loss_value)])
+                log_vars.append([loss_name, sum(_loss.mean() for _loss in loss_value)])
             else:
-                raise TypeError(
-                    f'{loss_name} is not a tensor or list of tensors')
+                raise TypeError(f"{loss_name} is not a tensor or list of tensors")
 
-        loss = sum(value for key, value in log_vars if 'loss' in key)
-        log_vars.insert(0, ['loss', loss])
+        loss = sum(value for key, value in log_vars if "loss" in key)
+        log_vars.insert(0, ["loss", loss])
         log_vars = OrderedDict(log_vars)  # type: ignore
 
         for loss_name, loss_value in log_vars.items():
@@ -129,13 +125,12 @@ class BEVFusion(Base3DDetector):
     @property
     def with_bbox_head(self):
         """bool: Whether the detector has a box head."""
-        return hasattr(self, 'bbox_head') and self.bbox_head is not None
+        return hasattr(self, "bbox_head") and self.bbox_head is not None
 
     @property
     def with_seg_head(self):
-        """bool: Whether the detector has a segmentation head.
-        """
-        return hasattr(self, 'seg_head') and self.seg_head is not None
+        """bool: Whether the detector has a segmentation head."""
+        return hasattr(self, "seg_head") and self.seg_head is not None
 
     def extract_img_feat(
         self,
@@ -160,47 +155,31 @@ class BEVFusion(Base3DDetector):
         BN, C, H, W = x.size()
         x = x.view(B, int(BN / B), C, H, W)
 
-        with torch.autocast(device_type='cuda', dtype=torch.float32):
+        with torch.autocast(device_type="cuda", dtype=torch.float32):
             # Check if points are zeroed
-            points_are_zero = points is None or all(p.sum().item() == 0 for p in points)
-            
-            if points_are_zero:
-                # Use LSSTransform when no lidar data
-                x = self.view_transform_img(
-                    x,
-                    None,  # No points needed
-                    None,  # No lidar2image needed
-                    camera_intrinsics,
-                    camera2lidar,
-                    img_aug_matrix,
-                    lidar_aug_matrix,
-                    img_metas,
-                )
-            else:
-                # Use DepthLSSTransform when lidar data is present
-                x = self.view_transform(
-                    x,
-                    points,
-                    lidar2image,
-                    camera_intrinsics,
-                    camera2lidar,
-                    img_aug_matrix,
-                    lidar_aug_matrix,
-                    img_metas,
-                )
+
+            # Use DepthLSSTransform when lidar data is present
+            x = self.view_transform(
+                x,
+                points,
+                lidar2image,
+                camera_intrinsics,
+                camera2lidar,
+                img_aug_matrix,
+                lidar_aug_matrix,
+                img_metas,
+            )
         return x
 
     def extract_pts_feat(self, batch_inputs_dict) -> torch.Tensor:
-        points = batch_inputs_dict['points']
-        #print(self.pts_middle_encoder)
+        points = batch_inputs_dict["points"]
+        # print(self.pts_middle_encoder)
         # Check if points are empty or zeroed
         if all(p.sum().item() == 0 for p in points):
             # Return zero tensor with correct shape for fusion
-            x = torch.zeros((len(points), 256, 
-                              180, 180), 
-                             device=points[0].device)
+            x = torch.zeros((len(points), 256, 180, 180), device=points[0].device)
             return x
-        with torch.autocast('cuda', enabled=False):
+        with torch.autocast("cuda", enabled=False):
             points = [point.float() for point in points]
             feats, coords, sizes = self.voxelize(points)
             batch_size = coords[-1, 0] + 1
@@ -221,7 +200,7 @@ class BEVFusion(Base3DDetector):
                 f, c = ret
                 n = None
             feats.append(f)
-            coords.append(F.pad(c, (1, 0), mode='constant', value=k))
+            coords.append(F.pad(c, (1, 0), mode="constant", value=k))
             if n is not None:
                 sizes.append(n)
 
@@ -230,18 +209,22 @@ class BEVFusion(Base3DDetector):
         if len(sizes) > 0:
             sizes = torch.cat(sizes, dim=0)
             if self.voxelize_reduce:
-                feats = feats.sum(
-                    dim=1, keepdim=False) / sizes.type_as(feats).view(-1, 1)
+                feats = feats.sum(dim=1, keepdim=False) / sizes.type_as(feats).view(
+                    -1, 1
+                )
                 feats = feats.contiguous()
 
         return feats, coords, sizes
 
-    def predict(self, batch_inputs_dict: Dict[str, Optional[Tensor]],
-                batch_data_samples: List[Det3DDataSample],
-                **kwargs) -> List[Det3DDataSample]:
+    def predict(
+        self,
+        batch_inputs_dict: Dict[str, Optional[Tensor]],
+        batch_data_samples: List[Det3DDataSample],
+        **kwargs,
+    ) -> List[Det3DDataSample]:
         batch_input_metas = [item.metainfo for item in batch_data_samples]
         feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
-        
+
         # Double the input metas for consistency
         doubled_input_metas = []
         for meta in batch_input_metas:
@@ -249,13 +232,12 @@ class BEVFusion(Base3DDetector):
 
         if self.with_bbox_head:
             outputs = self.bbox_head.predict(feats, doubled_input_metas)
-            
+
         # Take only the second prediction (camera+lidar) for each sample
         outputs = [outputs[i] for i in range(1, len(outputs), 2)]
-        
+
         res = self.add_pred_to_datasample(batch_data_samples, outputs)
         return res
-
 
     def extract_feat(
         self,
@@ -263,9 +245,9 @@ class BEVFusion(Base3DDetector):
         batch_input_metas,
         **kwargs,
     ):
-        imgs = batch_inputs_dict.get('imgs', None)
-        points = batch_inputs_dict.get('points', None)
-        
+        imgs = batch_inputs_dict.get("imgs", None)
+        points = batch_inputs_dict.get("points", None)
+
         # Will store two complete samples: [camera_only_sample, camera_lidar_sample]
         all_features = []
         #
@@ -274,11 +256,11 @@ class BEVFusion(Base3DDetector):
             lidar2image, camera_intrinsics, camera2lidar = [], [], []
             img_aug_matrix, lidar_aug_matrix = [], []
             for i, meta in enumerate(batch_input_metas):
-                lidar2image.append(meta['lidar2img'])
-                camera_intrinsics.append(meta['cam2img'])
-                camera2lidar.append(meta['cam2lidar'])
-                img_aug_matrix.append(meta.get('img_aug_matrix', np.eye(4)))
-                lidar_aug_matrix.append(meta.get('lidar_aug_matrix', np.eye(4)))
+                lidar2image.append(meta["lidar2img"])
+                camera_intrinsics.append(meta["cam2img"])
+                camera2lidar.append(meta["cam2lidar"])
+                img_aug_matrix.append(meta.get("img_aug_matrix", np.eye(4)))
+                lidar_aug_matrix.append(meta.get("lidar_aug_matrix", np.eye(4)))
 
             lidar2image = imgs[0].new_tensor(np.asarray(lidar2image))
             camera_intrinsics = imgs[0].new_tensor(np.array(camera_intrinsics))
@@ -288,17 +270,24 @@ class BEVFusion(Base3DDetector):
 
             # Sample 1: Camera-only features
             features_cam = []
-            zero_points = [torch.zeros_like(p) for p in points] if points is not None else None
+            zero_points = (
+                [torch.zeros_like(p) for p in points] if points is not None else None
+            )
             img_feature_cam = self.extract_img_feat(
-                imgs, zero_points, lidar2image, camera_intrinsics,
-                camera2lidar, img_aug_matrix, lidar_aug_matrix,
-                batch_input_metas
+                imgs,
+                zero_points,
+                lidar2image,
+                camera_intrinsics,
+                camera2lidar,
+                img_aug_matrix,
+                lidar_aug_matrix,
+                batch_input_metas,
             )
             features_cam.append(img_feature_cam)
-            
+
             if points is not None:
                 # Add zeroed lidar features for camera-only sample
-                zero_dict = {'points': zero_points}
+                zero_dict = {"points": zero_points}
                 pts_feature_zero = self.extract_pts_feat(zero_dict)
                 features_cam.append(pts_feature_zero)
 
@@ -312,12 +301,17 @@ class BEVFusion(Base3DDetector):
             # Sample 2: Camera + Lidar features
             features_full = []
             img_feature_full = self.extract_img_feat(
-                imgs, deepcopy(points), lidar2image, camera_intrinsics,
-                camera2lidar, img_aug_matrix, lidar_aug_matrix,
-                batch_input_metas
+                imgs,
+                deepcopy(points),
+                lidar2image,
+                camera_intrinsics,
+                camera2lidar,
+                img_aug_matrix,
+                lidar_aug_matrix,
+                batch_input_metas,
             )
             features_full.append(img_feature_full)
-            
+
             if points is not None:
                 pts_feature = self.extract_pts_feat(batch_inputs_dict)
                 features_full.append(pts_feature)
@@ -331,21 +325,24 @@ class BEVFusion(Base3DDetector):
 
         # Stack the two samples together
         x = torch.cat(all_features, dim=0)  # Now batch dimension is 2
-        
+
         # Process through backbone and neck
         x = self.pts_backbone(x)
         x = self.pts_neck(x)
 
         return x
 
-    def loss(self, batch_inputs_dict: Dict[str, Optional[Tensor]],
-             batch_data_samples: List[Det3DDataSample],
-             **kwargs) -> List[Det3DDataSample]:
+    def loss(
+        self,
+        batch_inputs_dict: Dict[str, Optional[Tensor]],
+        batch_data_samples: List[Det3DDataSample],
+        **kwargs,
+    ) -> List[Det3DDataSample]:
         batch_input_metas = [item.metainfo for item in batch_data_samples]
-        
+
         # Extract features - this now returns doubled batch size
         feats = self.extract_feat(batch_inputs_dict, batch_input_metas)
-        
+
         # Duplicate the data samples for the doubled batch
         doubled_data_samples = []
         for sample in batch_data_samples:
@@ -358,5 +355,5 @@ class BEVFusion(Base3DDetector):
         if self.with_bbox_head:
             bbox_loss = self.bbox_head.loss(feats, doubled_data_samples)
         losses.update(bbox_loss)
-        
+
         return losses
