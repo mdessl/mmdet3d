@@ -22,8 +22,8 @@ model = dict(
     img_backbone=dict(
         type="mmdet.SwinTransformer",
         embed_dims=96,
-        depths=[2, 2, 6, 2],
-        num_heads=[3, 6, 12, 24],
+        depths=[2, 2, 6, 2], #2, 2, 6, 2
+        num_heads=[3, 6, 12, 24], #3, 6, 12, 24
         window_size=7,
         mlp_ratio=4,
         qkv_bias=True,
@@ -41,22 +41,23 @@ model = dict(
         ),
     ),
     img_neck=dict(
-        type='FPNC',
-        final_dim=(900, 1600),
-        downsample=8, 
-        in_channels=[192, 384, 768], # was: [96, 192, 384, 768
+        type="FPNC",
+        final_dim=(800, 1400),  # (900, 1600),
+        downsample=8,
+        in_channels=[192, 384, 768],  # was: [96, 192, 384, 768
         out_channels=256,
         outC=256,
         use_adp=True,
-        num_outs=5),
+        num_outs=3,
+    ),
     view_transform=dict(
         type="LSSNoPoints",
-        image_size=(900, 1600),
-        feature_size=(112, 180),
-        xbound=[-45.0, 45.0, 0.5],
-        ybound=[-45.0, 45.0, 0.5],
-        zbound=[-5.0, 3.0, 8.0],    # [min, max, bin_size]
-        dbound=[4.0, 45.0, 1.0],    # [min, max, bin_size]
+        image_size=(800, 1400),  # (900, 1600),
+        feature_size=(50, 88),  # Halve resolution
+        xbound=[-45.0, 45.0, 0.9],  # Coarser 0.9m grid
+        ybound=[-45.0, 45.0, 0.9],
+        zbound=[-5.0, 3.0, 8.0],  # [min, max, bin_size]
+        dbound=[4.0, 45.0, 1.0],  # [min, max, bin_size]
         downsample=8,
     ),
     fusion_layer=dict(type="ConvFuser", in_channels=[256, 256], out_channels=256),
@@ -271,10 +272,11 @@ val_cfg = dict()
 test_cfg = dict()
 
 optim_wrapper = dict(
-    type="OptimWrapper",
-    optimizer=dict(type="AdamW", lr=0.0002, weight_decay=0.01),
+    type='OptimWrapper',
+    optimizer=dict(type='AdamW', lr=0.000005, weight_decay=0.01),
     clip_grad=dict(max_norm=35, norm_type=2),
-)
+    accumulative_counts=16)
+
 
 # Default setting for scaling LR automatically
 #   - `enable` means enable scaling LR automatically
