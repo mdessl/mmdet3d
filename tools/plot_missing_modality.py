@@ -22,21 +22,21 @@ plt.rcParams['figure.facecolor'] = 'white'
 plt.rcParams['axes.facecolor'] = 'white'
 
 # Plot lines (without labels, we'll create custom legend)
-plt.plot(modality_reduction, bevfusion_camera, color=camera_color, linestyle='--', marker='o', linewidth=2)
+plt.plot(modality_reduction, bevfusion_camera, color=lidar_color, linestyle='-', marker='o', linewidth=2)
 plt.plot(modality_reduction, bevfusion_lidar, color=lidar_color, linestyle='--', marker='o', linewidth=2)
 plt.plot(modality_reduction, sbnet_camera, color=camera_color, linestyle='-', marker='s', linewidth=2)
-plt.plot(modality_reduction, sbnet_lidar, color=lidar_color, linestyle='-', marker='s', linewidth=2)
+plt.plot(modality_reduction, sbnet_lidar, color=camera_color, linestyle='--', marker='s', linewidth=2)
 
 # Create custom legend elements
 legend_elements = [
     # Camera group
-    Line2D([0], [0], color=camera_color, linestyle='--', marker='o', label='BEVFusion (% Camera Removed)', linewidth=2, markersize=1),
+    Line2D([0], [0], color=lidar_color, linestyle='-', marker='o', label='BEVFusion (% Camera Removed)', linewidth=2, markersize=1),
     Line2D([0], [0], color=camera_color, linestyle='-', marker='s', label='SBNet (% Camera Removed)', linewidth=2, markersize=1),
     # Separator
     Line2D([0], [0], color='none', label=''),
     # LiDAR group
     Line2D([0], [0], color=lidar_color, linestyle='--', marker='o', label='BEVFusion (% LiDAR Removed)', linewidth=2, markersize=1),
-    Line2D([0], [0], color=lidar_color, linestyle='-', marker='s', label='SBNet (% LiDAR Removed)', linewidth=2, markersize=1)
+    Line2D([0], [0], color=camera_color, linestyle='--', marker='s', label='SBNet (% LiDAR Removed)', linewidth=2, markersize=1)
 ]
 
 # Customize the plot

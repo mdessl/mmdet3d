@@ -210,8 +210,16 @@ class MetricsCollector:
         logger.info(f"Number of raw data entries: {len(raw_data)}")
         
         # Set style and figure size
-        plt.style.use('seaborn')
-        plt.rcParams['figure.figsize'] = [18, 12]
+        plt.style.use('seaborn-white')  # Use white background style
+        plt.rcParams['axes.grid'] = True
+        plt.rcParams['grid.color'] = 'black'
+        plt.rcParams['grid.alpha'] = 0.2
+        
+        # Define model colors
+        MODEL_COLORS = {
+            'sbnet': '#2271B2',     # blue
+            'bevfusion': '#D55E00'  # vermillion
+        }
         
         # Define sensor configurations to plot with their specific corruption types
         sensor_configs = [
@@ -225,7 +233,9 @@ class MetricsCollector:
                     'fog': ('purple', 'Fog'),
                     'motionblur': ('orange', 'Motion Blur'),
                     'pointsreducing': ('brown', 'Point Reducing')
-                }
+                },
+                'layout': (3, 3),  # 3x3 grid for base case
+                'figsize': (18, 12)  # Original size for 3x3
             },
             {
                 'sensors': 'camera_1.0',
@@ -235,7 +245,9 @@ class MetricsCollector:
                     'fog': ('purple', 'Fog'),
                     'motionblur': ('orange', 'Motion Blur'),
                     'pointsreducing': ('brown', 'Point Reducing')
-                }
+                },
+                'layout': (1, 4),  # 1x4 grid for camera removed
+                'figsize': (24, 4)  # Adjusted for 1x4 to match subplot size
             },
             {
                 'sensors': 'lidar_1.0',
@@ -245,21 +257,24 @@ class MetricsCollector:
                     'dark': ('blue', 'Dark'),
                     'fog': ('purple', 'Fog'),
                     'motionblur': ('orange', 'Motion Blur')
-                }
+                },
+                'layout': (1, 4),  # 1x4 grid for lidar removed
+                'figsize': (24, 4)  # Adjusted for 1x4 to match subplot size
             }
         ]
         
         for config in sensor_configs:
             logger.info(f"\nProcessing config for: {config['title']}")
             
-            fig = plt.figure(figsize=(18, 12))
-            n_corruptions = len(config['corruptions'])
-            n_rows = (n_corruptions + 2) // 3
-            n_cols = 3
+            fig = plt.figure(figsize=config['figsize'])
+            fig.patch.set_facecolor('white')  # Set figure background to white
+            
+            n_rows, n_cols = config['layout']
             
             for idx, (corruption_base, (color, display_name)) in enumerate(config['corruptions'].items()):
                 ax = plt.subplot(n_rows, n_cols, idx + 1)
-                legend_handles = []  # Create list to store legend handles
+                ax.set_facecolor('white')  # Set subplot background to white
+                legend_handles = []
                 
                 # First, find all possible severity levels for this corruption
                 all_severities = set()
@@ -295,14 +310,13 @@ class MetricsCollector:
                                     break
                     
                     if severities and values:
-                        # Plot line with larger markers
-                        linestyle = '--' if model == 'bevfusion' else '-'
-                        ax.plot(severities, values, color=color, linestyle=linestyle, marker='o',
-                               linewidth=2.0, markersize=6)
+                        # Plot line with larger markers using model-specific colors (no dashed lines)
+                        ax.plot(severities, values, color=MODEL_COLORS[model], 
+                               marker='o', linewidth=2.0, markersize=6)
                         
-                        # Create legend handle separately
-                        legend_line = Line2D([0], [0], color=color, linestyle=linestyle, marker='o',
-                                           label=model.capitalize(), linewidth=2.0, markersize=1)
+                        # Create legend handle with model-specific colors
+                        legend_line = Line2D([0], [0], color=MODEL_COLORS[model], 
+                                           marker='o', label=model.capitalize(), linewidth=2.0, markersize=1)
                         legend_handles.append(legend_line)
                 
                 # Set x-axis ticks to show all possible severity levels
@@ -312,12 +326,16 @@ class MetricsCollector:
                 ax.set_xlabel('Severity Level')
                 ax.set_ylabel('mAP')
                 ax.set_title(display_name)
-                ax.grid(True, alpha=0.3)
+                ax.grid(True, alpha=0.2, color='black')  # Set grid to black with low alpha
                 ax.set_ylim(0, 0.7)
                 ax.legend(handles=legend_handles)
             
-            # Adjust layout and title
-            plt.tight_layout()
+            # Adjust layout based on the configuration
+            if n_rows == 1:  # For 100% removed cases
+                plt.subplots_adjust(top=0.8, bottom=0.2, wspace=0.3, left=0.05, right=0.95)
+            else:  # For base case
+                plt.tight_layout()
+            
             fig.suptitle(f'{config["title"]}', y=1.02, fontsize=16)
             
             # Save plot
