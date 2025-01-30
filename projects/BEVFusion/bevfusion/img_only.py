@@ -17,7 +17,7 @@ from .ops import Voxelization
 
 
 @MODELS.register_module()
-class BEVFusion(Base3DDetector):
+class img_only(Base3DDetector):
 
     def __init__(
         self,
@@ -42,7 +42,7 @@ class BEVFusion(Base3DDetector):
         self.voxelize_reduce = voxelize_cfg.pop('voxelize_reduce')
         self.pts_voxel_layer = Voxelization(**voxelize_cfg)
 
-        self.pts_voxel_encoder = MODELS.build(pts_voxel_encoder)
+        #self.pts_voxel_encoder = MODELS.build(pts_voxel_encoder)
 
         self.img_backbone = MODELS.build(
             img_backbone) if img_backbone is not None else None
@@ -50,10 +50,10 @@ class BEVFusion(Base3DDetector):
             img_neck) if img_neck is not None else None
         self.view_transform = MODELS.build(
             view_transform) if view_transform is not None else None
-        self.pts_middle_encoder = MODELS.build(pts_middle_encoder)
+        #self.pts_middle_encoder = MODELS.build(pts_middle_encoder)
 
-        self.fusion_layer = MODELS.build(
-            fusion_layer) if fusion_layer is not None else None
+        #self.fusion_layer = MODELS.build(
+        #    fusion_layer) if fusion_layer is not None else None
 
         self.pts_backbone = MODELS.build(pts_backbone)
         self.pts_neck = MODELS.build(pts_neck)
@@ -61,7 +61,7 @@ class BEVFusion(Base3DDetector):
         self.bbox_head = MODELS.build(bbox_head)
 
         self.init_weights()
-        self.freeze_modules(module_keywords=['pts_voxel_encoder', 'pts_middle_encoder'], exclude_keywords=["data_preprocessor", "view_transform", 'pts_backbone', "pts_neck", "bbox_head", "img_backbone","img_neck", ])
+        #self.freeze_modules(module_keywords=['pts_voxel_encoder', 'pts_middle_encoder'], exclude_keywords=["data_preprocessor", "view_transform", 'pts_backbone', "pts_neck", "bbox_head", "img_backbone","img_neck", ])
 
     def _forward(self,
                  batch_inputs: Tensor,
@@ -311,8 +311,7 @@ class BEVFusion(Base3DDetector):
         **kwargs,
     ):
         imgs = batch_inputs_dict.get('imgs', None)
-        points = batch_inputs_dict.get('points', None)
-
+        
         features = []
         
         if imgs is not None:
@@ -331,24 +330,21 @@ class BEVFusion(Base3DDetector):
             camera2lidar = imgs[0].new_tensor(np.asarray(camera2lidar))
             img_aug_matrix = imgs[0].new_tensor(np.asarray(img_aug_matrix))
             lidar_aug_matrix = imgs[0].new_tensor(np.asarray(lidar_aug_matrix))
-            img_feature = self.extract_img_feat(imgs, deepcopy(points),
+            img_feature = self.extract_img_feat(imgs, None,  # Remove points dependency
                                                 lidar2image, camera_intrinsics,
                                                 camera2lidar, img_aug_matrix,
                                                 lidar_aug_matrix,
                                                 batch_input_metas)
             features.append(img_feature)
         
-        if points is not None:
-            points_sum = sum(p.sum().item() for p in points)
-        
-        pts_feature = self.extract_pts_feat(batch_inputs_dict)
-        features.append(pts_feature)
-        if self.fusion_layer is not None:
-            x = self.fusion_layer(features)
+        # Remove all LiDAR-related processing
+        if False:#self.fusion_layer is not None:
+            pass
+            #x = self.fusion_layer(features)
         else:
-            assert len(features) == 1, features
             x = features[0]
 
+        # Keep these layers since they process the final fused features
         x = self.pts_backbone(x)
         x = self.pts_neck(x)
 

@@ -1,4 +1,5 @@
 from .bevfusion import BEVFusion
+from .img_only import img_only
 from .sbnet import SBNet
 from .bevfusion_necks import GeneralizedLSSFPN
 from .depth_lss import DepthLSSTransform, LSSTransform, LSSNoPoints

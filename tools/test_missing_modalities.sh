@@ -44,7 +44,7 @@ fi
 mkdir -p "${BASE_WORK_DIR}"
 
 # Array of ratios to test
-RATIOS=(1.0 0.0)
+RATIOS=(1.0)
 
 # Function to wait for a process and check its exit status
 wait_and_check() {
@@ -85,5 +85,4 @@ for MODALITY in "${MODALITIES[@]}"; do
     done
 done
 
-        bash tools/test_missing_modalities.sh projects/BEVFusion/configs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d.py work_dirs/bevfusion_lidar-cam_voxel0075_second_secfpn_8xb4-cyclic-20e_nus-3d/epoch_1.pth 1
 

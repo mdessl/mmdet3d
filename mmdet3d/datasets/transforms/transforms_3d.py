@@ -2727,8 +2727,8 @@ class AddMissingModality(BaseTransform):
             points = input_dict["points"]
             if random.random() < self.zero_ratio:
                 points.tensor = torch.zeros_like(points.tensor)
-            input_dict["points"] = points
-            input_dict["lidar_zero"] = True
+                input_dict["points"] = points
+                input_dict["lidar_zero"] = True
         
         return input_dict
 
