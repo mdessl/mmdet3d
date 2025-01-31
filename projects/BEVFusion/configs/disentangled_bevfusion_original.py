@@ -10,29 +10,20 @@ custom_imports = dict(
     ],
     allow_failed_imports=False
 )
-del _base_.model
-
 
 model = dict(
-    type="img_only",
+    type="BEVFusion",
     data_preprocessor=dict(
         type="Det3DDataPreprocessor",
         mean=[123.675, 116.28, 103.53],
         std=[58.395, 57.12, 57.375],
         bgr_to_rgb=False,
-        pad_size_divisor=32,
-        voxelize_cfg=dict(
-            max_num_points=10,
-            point_cloud_range=[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0],
-            voxel_size=[0.075, 0.075, 0.2],
-            max_voxels=[120000, 160000],
-            voxelize_reduce=True)
     ),
     img_backbone=dict(
         type="mmdet.SwinTransformer",
         embed_dims=96,
-        depths=[2, 2, 6, 2], #2, 2, 6, 2
-        num_heads=[3, 6, 12, 24], #3, 6, 12, 24
+        depths=[2, 2, 6, 2],
+        num_heads=[3, 6, 12, 24],
         window_size=7,
         mlp_ratio=4,
         qkv_bias=True,
@@ -50,112 +41,26 @@ model = dict(
         ),
     ),
     img_neck=dict(
-        type="FPNC",
-        final_dim=(900, 1600),  # Changed from (256, 704)
-        downsample=8,
-        in_channels=[192, 384, 768],  # was: [96, 192, 384, 768
+        type='FPNC',
+        final_dim=(900, 1600),
+        downsample=8, 
+        in_channels=[192, 384, 768], # was: [96, 192, 384, 768
         out_channels=256,
         outC=256,
         use_adp=True,
-        num_outs=5,  # Changed from 3
-    ),
+        num_outs=5),
     view_transform=dict(
         type="LSSNoPoints",
-        image_size=(900, 1600),  # Changed from (256, 704)
-        feature_size=(112, 180),  # Changed from (50, 88)
-        xbound=[-45.0, 45.0, 0.5],  # Changed from 0.9
-        ybound=[-45.0, 45.0, 0.5],  # Changed from 0.9
-        zbound=[-5.0, 3.0, 8.0],
-        dbound=[4.0, 45.0, 1.0],
+        image_size=(900, 1600),
+        feature_size=(112, 180),
+        xbound=[-45.0, 45.0, 0.5],
+        ybound=[-45.0, 45.0, 0.5],
+        zbound=[-5.0, 3.0, 8.0],    # [min, max, bin_size]
+        dbound=[4.0, 45.0, 1.0],    # [min, max, bin_size]
         downsample=8,
     ),
-    pts_backbone=dict(
-        type='SECOND',
-        in_channels=256,
-        out_channels=[128, 256],
-        layer_nums=[5, 5],
-        layer_strides=[1, 2],
-        norm_cfg=dict(type='BN', eps=0.001, momentum=0.01),
-        conv_cfg=dict(type='Conv2d', bias=False)),
-    pts_neck=dict(
-        type='SECONDFPN',
-        in_channels=[128, 256],
-        out_channels=[256, 256],
-        upsample_strides=[1, 2],
-        norm_cfg=dict(type='BN', eps=0.001, momentum=0.01),
-        upsample_cfg=dict(type='deconv', bias=False),
-        use_conv_for_no_stride=True),
-    bbox_head=dict(
-        type='TransFusionHead',
-        num_proposals=200,
-        auxiliary=True,
-        in_channels=512,
-        hidden_channel=128,
-        num_classes=10,
-        nms_kernel_size=3,
-        bn_momentum=0.1,
-        num_decoder_layers=1,
-        decoder_layer=dict(
-            type='TransformerDecoderLayer',
-            self_attn_cfg=dict(embed_dims=128, num_heads=8, dropout=0.1),
-            cross_attn_cfg=dict(embed_dims=128, num_heads=8, dropout=0.1),
-            ffn_cfg=dict(
-                embed_dims=128,
-                feedforward_channels=256,
-                num_fcs=2,
-                ffn_drop=0.1,
-                act_cfg=dict(type='ReLU', inplace=True),
-            ),
-            norm_cfg=dict(type='LN'),
-            pos_encoding_cfg=dict(input_channel=2, num_pos_feats=128)),
-        train_cfg=dict(
-            dataset='nuScenes',
-            point_cloud_range=[-54.0, -54.0, -5.0, 54.0, 54.0, 3.0],
-            grid_size=[1440, 1440, 41],
-            voxel_size=[0.075, 0.075, 0.2],
-            out_size_factor=8,
-            gaussian_overlap=0.1,
-            min_radius=2,
-            pos_weight=-1,
-            code_weights=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2],
-            assigner=dict(
-                type='HungarianAssigner3D',
-                iou_calculator=dict(type='BboxOverlaps3D', coordinate='lidar'),
-                cls_cost=dict(
-                    type='mmdet.FocalLossCost',
-                    gamma=2.0,
-                    alpha=0.25,
-                    weight=0.15),
-                reg_cost=dict(type='BBoxBEVL1Cost', weight=0.25),
-                iou_cost=dict(type='IoU3DCost', weight=0.25))),
-        test_cfg=dict(
-            dataset='nuScenes',
-            grid_size=[1440, 1440, 41],
-            out_size_factor=8,
-            voxel_size=[0.075, 0.075],
-            pc_range=[-54.0, -54.0],
-            nms_type=None),
-        common_heads=dict(
-            center=[2, 2], height=[1, 2], dim=[3, 2], rot=[2, 2], vel=[2, 2]),
-        bbox_coder=dict(
-            type='TransFusionBBoxCoder',
-            pc_range=[-54.0, -54.0],
-            post_center_range=[-61.2, -61.2, -10.0, 61.2, 61.2, 10.0],
-            score_threshold=0.0,
-            out_size_factor=8,
-            voxel_size=[0.075, 0.075],
-            code_size=10),
-        loss_cls=dict(
-            type='mmdet.FocalLoss',
-            use_sigmoid=True,
-            gamma=2.0,
-            alpha=0.25,
-            reduction='mean',
-            loss_weight=1.0),
-        loss_heatmap=dict(
-            type='mmdet.GaussianFocalLoss', reduction='mean', loss_weight=1.0),
-        loss_bbox=dict(
-            type='mmdet.L1Loss', reduction='mean', loss_weight=0.25)))
+    fusion_layer=dict(type="ConvFuser", in_channels=[256, 256], out_channels=256),
+)
 
 train_pipeline = [
     dict(
@@ -274,6 +179,22 @@ test_pipeline = [
         backend_args=backend_args,
     ),
     dict(
+        type="LoadPointsFromFile",
+        coord_type="LIDAR",
+        load_dim=5,
+        use_dim=5,
+        backend_args=backend_args,
+    ),
+    dict(
+        type="LoadPointsFromMultiSweeps",
+        sweeps_num=9,
+        load_dim=5,
+        use_dim=5,
+        pad_empty_sweeps=True,
+        remove_close=True,
+        backend_args=backend_args,
+    ),
+    dict(
         type="ImageAug3D",
         final_dim=[256, 704],
         resize_lim=[0.48, 0.48],
@@ -350,10 +271,10 @@ val_cfg = dict()
 test_cfg = dict()
 
 optim_wrapper = dict(
-    type='OptimWrapper',
-    optimizer=dict(type='AdamW', lr=0.0005, weight_decay=0.01),
+    type="OptimWrapper",
+    optimizer=dict(type="AdamW", lr=0.0002, weight_decay=0.01),
     clip_grad=dict(max_norm=35, norm_type=2),
-    accumulative_counts=16)
+)
 
 # Default setting for scaling LR automatically
 #   - `enable` means enable scaling LR automatically
