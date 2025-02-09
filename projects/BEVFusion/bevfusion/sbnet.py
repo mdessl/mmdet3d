@@ -108,7 +108,7 @@ class SBNet(BEVFusion):
         
         # Create modality masks for the batch
         batch_size = len(batch_input_metas)
-        
+        print(batch_input_metas[0]['sbnet_modality'])
         if batch_input_metas[0].get('sbnet_modality', None) is None:
             raise ValueError("sbnet_modality not found in batch_input_metas")
 

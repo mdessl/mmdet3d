@@ -65,7 +65,10 @@ class BEVFusion(Base3DDetector):
             self.seg_head = MODELS.build(seg_head)
 
         self.init_weights()
-
+        self.freeze_modules(
+            module_keywords=["data_preprocessor", "img_backbone", "img_neck", 'pts_voxel_encoder', 'pts_middle_encoder', 'pts_backbone', "pts_neck","seg_head"],
+            exclude_keywords=["view_transform", "fusion_layer"]
+        )
     def _forward(self,
                  batch_inputs: Tensor,
                  batch_data_samples: OptSampleList = None):
@@ -300,3 +303,50 @@ class BEVFusion(Base3DDetector):
             losses = self.bbox_head.loss(feats, batch_data_samples)
 
         return losses
+
+    def freeze_modules(self, module_keywords=None, exclude_keywords=None, verbose=True):
+        """Freeze model weights based on module names.
+        
+        Args:
+            module_keywords (list[str], optional): List of keywords to match module names for freezing.
+                If None, no modules will be frozen based on keywords.
+            exclude_keywords (list[str], optional): List of keywords to exclude modules from freezing.
+                Takes precedence over module_keywords.
+            verbose (bool): Whether to print freezing status. Defaults to True.
+        """
+        if module_keywords is None:
+            module_keywords = []
+        if exclude_keywords is None:
+            exclude_keywords = []
+        
+        frozen_params = 0
+        total_params = 0
+        
+        for name, module in self.named_modules():
+            # Only process leaf modules (those without children)
+            if len(list(module.children())) == 0:
+                params = list(module.parameters())
+                if not params:  # Skip modules without parameters
+                    continue
+                
+                should_freeze = any(keyword in name for keyword in module_keywords) if module_keywords else False
+                should_exclude = any(keyword in name for keyword in exclude_keywords)
+                
+                # Count parameters
+                num_params = sum(p.numel() for p in params)
+                total_params += num_params
+                
+                # Freeze if module matches criteria and isn't excluded
+                if should_freeze and not should_exclude:
+                    for param in params:
+                        param.requires_grad = False
+                    frozen_params += num_params
+                    if verbose:
+                        print(f"Froze {name}: {num_params:,} parameters")
+                else:
+                    if verbose:
+                        print(f"Left {name} unfrozen: {num_params:,} parameters")
+        
+        if verbose:
+            print(f"\nFroze {frozen_params:,} parameters out of {total_params:,} total")
+            print(f"Trainable parameters: {total_params - frozen_params:,}")

@@ -137,6 +137,12 @@ def main():
         # if 'runner_type' is set in the cfg
         runner = RUNNERS.build(cfg)
 
+    
+    #print(new_state_dict.keys())   
+    #import pdb; pdb.set_trace()
+    #new_state_dict["module.view_transform.depthnet.weight"]
+    #runner.model.load_state_dict(new_state_dict, strict=True)
+
     # start training
     runner.train()
 
