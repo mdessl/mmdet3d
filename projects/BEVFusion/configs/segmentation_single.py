@@ -306,7 +306,7 @@ test_pipeline = [
 # Dataloaders (the second config references the base but overrides pipeline)
 ##############################################################################
 train_dataloader = dict(
-    batch_size=1,
+    batch_size=3,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(type='DefaultSampler', shuffle=True),
@@ -415,14 +415,19 @@ test_cfg = dict()
 optim_wrapper = dict(
     type='OptimWrapper',
     optimizer=dict(type='AdamW', lr=0.0001, weight_decay=0.01),
-    clip_grad=dict(max_norm=35, norm_type=2)
-)
+    clip_grad=dict(max_norm=35, norm_type=2),
+    accumulative_counts=16)
 
 auto_scale_lr = dict(enable=True, base_batch_size=32)
 
 default_hooks = dict(
-    logger=dict(type='LoggerHook', interval=50),
-    checkpoint=dict(type='CheckpointHook', interval=1)
+    logger=dict(type="LoggerHook", interval=1),
+    checkpoint=dict(
+        type="CheckpointHook",
+        interval=2000,  # Save every 500 iterations
+        by_epoch=False,  # Change to iteration-based saving
+        max_keep_ckpts=100,
+    ),  # Keep only the last 3 checkpoints to save disk space
 )
 
 # If you want to enable find_unused_parameters or add custom hooks:

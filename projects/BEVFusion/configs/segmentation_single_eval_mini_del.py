@@ -41,7 +41,7 @@ map_classes = [
 # Model definition: merges both lidar (base) + camera segmentation
 ##############################################################################
 model = dict(
-    type='SBNet',
+    type='BEVFusion',
     # Merge the voxelize part (for LiDAR) and the image normalization part
     data_preprocessor=dict(
         type='Det3DDataPreprocessor',
@@ -130,7 +130,7 @@ model = dict(
     view_transform=dict(
         type='LSSTransform',
         in_channels=256,
-        out_channels=256,
+        out_channels=80,
         image_size=[256, 704],
         feature_size=[32, 88],  # Matches [image_size[0] // 8, image_size[1] // 8]
         xbound=[-51.2, 51.2, 0.4],  # Changed from [-54.0, 54.0, 0.3]
@@ -139,7 +139,7 @@ model = dict(
         dbound=[1.0, 60.0, 0.5],
         downsample=2
     ),
-    fusion_layer=dict(type='ConvFuser', in_channels=[256, 256], out_channels=256),
+    fusion_layer=dict(type='ConvFuser', in_channels=[256, 80], out_channels=256),
     seg_head=dict(
         type='BEVSegmentationHead',
         in_channels=512,
@@ -414,25 +414,21 @@ test_cfg = dict()
 
 optim_wrapper = dict(
     type='OptimWrapper',
-    optimizer=dict(type='AdamW', lr=0.001, weight_decay=0.01),
+    optimizer=dict(type='AdamW', lr=0.0001, weight_decay=0.01),
     clip_grad=dict(max_norm=35, norm_type=2)
 )
 
 auto_scale_lr = dict(enable=True, base_batch_size=32)
 
-
-#default_hooks = dict(
-#    logger=dict(type="LoggerHook", interval=1),
-#    checkpoint=dict(
-#        type="CheckpointHook",
-#        interval=2000,  # Save every 500 iterations
-#        by_epoch=False,  # Change to iteration-based saving
-#        max_keep_ckpts=100,
-#    ),  # Keep only the last 3 checkpoints to save disk space
-#)
 default_hooks = dict(
-    logger=dict(type='LoggerHook', interval=50),
-    checkpoint=dict(type='CheckpointHook', interval=1))
+    logger=dict(type="LoggerHook", interval=1),
+    checkpoint=dict(
+        type="CheckpointHook",
+        interval=2000,  # Save every 500 iterations
+        by_epoch=False,  # Change to iteration-based saving
+        max_keep_ckpts=100,
+    ),  # Keep only the last 3 checkpoints to save disk space
+)
 
 # If you want to enable find_unused_parameters or add custom hooks:
 find_unused_parameters = True

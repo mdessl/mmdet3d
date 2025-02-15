@@ -89,12 +89,12 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
-    add_location_to_nuscenes_infos(
-        args.pkl_path+"train.pkl",
-        args.nusc_root,
-        args.out_path,
-        args.version
-    ) 
+    #add_location_to_nuscenes_infos(
+    #    args.pkl_path+"train.pkl",
+    #    args.nusc_root,
+    #    args.out_path,
+    #    args.version
+    #) 
     add_location_to_nuscenes_infos(
         args.pkl_path+"val.pkl",
         args.nusc_root,

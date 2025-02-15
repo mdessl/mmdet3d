@@ -18,7 +18,7 @@ class_names = [
 ]
 metainfo = dict(classes=class_names)
 dataset_type = 'NuScenesDataset'
-data_root = 'data/nuscenes/'
+data_root = 'data/mini/'
 data_prefix = dict(
     pts='samples/LIDAR_TOP',
     CAM_FRONT='samples/CAM_FRONT',
@@ -41,7 +41,7 @@ map_classes = [
 # Model definition: merges both lidar (base) + camera segmentation
 ##############################################################################
 model = dict(
-    type='SBNet',
+    type='BEVFusion',
     # Merge the voxelize part (for LiDAR) and the image normalization part
     data_preprocessor=dict(
         type='Det3DDataPreprocessor',
@@ -414,25 +414,21 @@ test_cfg = dict()
 
 optim_wrapper = dict(
     type='OptimWrapper',
-    optimizer=dict(type='AdamW', lr=0.001, weight_decay=0.01),
+    optimizer=dict(type='AdamW', lr=0.0001, weight_decay=0.01),
     clip_grad=dict(max_norm=35, norm_type=2)
 )
 
 auto_scale_lr = dict(enable=True, base_batch_size=32)
 
-
-#default_hooks = dict(
-#    logger=dict(type="LoggerHook", interval=1),
-#    checkpoint=dict(
-#        type="CheckpointHook",
-#        interval=2000,  # Save every 500 iterations
-#        by_epoch=False,  # Change to iteration-based saving
-#        max_keep_ckpts=100,
-#    ),  # Keep only the last 3 checkpoints to save disk space
-#)
 default_hooks = dict(
-    logger=dict(type='LoggerHook', interval=50),
-    checkpoint=dict(type='CheckpointHook', interval=1))
+    logger=dict(type="LoggerHook", interval=1),
+    checkpoint=dict(
+        type="CheckpointHook",
+        interval=2000,  # Save every 500 iterations
+        by_epoch=False,  # Change to iteration-based saving
+        max_keep_ckpts=100,
+    ),  # Keep only the last 3 checkpoints to save disk space
+)
 
 # If you want to enable find_unused_parameters or add custom hooks:
 find_unused_parameters = True

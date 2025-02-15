@@ -10,8 +10,7 @@ custom_imports = dict(
 point_cloud_range = [-51.2, -51.2, -5.0, 51.2, 51.2, 3.0]
 voxel_size = [0.1, 0.1, 0.2]
 image_size = [256, 704]
-#voxel_size = [0.075, 0.075, 0.2]
-#point_cloud_range = [-54.0, -54.0, -5.0, 54.0, 54.0, 3.0]
+
 class_names = [
     'car', 'truck', 'construction_vehicle', 'bus', 'trailer', 'barrier',
     'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone'
@@ -38,34 +37,29 @@ map_classes = [
 ]
 
 ##############################################################################
-# Model definition: merges both lidar (base) + camera segmentation
+# Base model definition (used for both teacher and student)
 ##############################################################################
-model = dict(
-    type='SBNet',
-    # Merge the voxelize part (for LiDAR) and the image normalization part
+base_model_cfg = dict(
+    type='BEVFusion',
     data_preprocessor=dict(
         type='Det3DDataPreprocessor',
-        # from the lidar base:
         pad_size_divisor=32,
         voxelize_cfg=dict(
             max_num_points=10,
             point_cloud_range=point_cloud_range,
             voxel_size=voxel_size,
-            max_voxels=[90000, 120000], #changed from 120000, 160000
+            max_voxels=[90000, 120000],
             voxelize_reduce=True
         ),
-        # from the camera config:
         mean=[123.675, 116.28, 103.53],
         std=[58.395, 57.12, 57.375],
         bgr_to_rgb=False
     ),
-
-    # ------------------- LIDAR modules (from the base config) -----------
     pts_voxel_encoder=dict(type='HardSimpleVFE', num_features=5),
     pts_middle_encoder=dict(
         type='BEVFusionSparseEncoder',
         in_channels=5,
-        sparse_shape=[1024, 1024, 41], # [1440, 1440, 41],
+        sparse_shape=[1024, 1024, 41],
         order=('conv', 'norm', 'act'),
         norm_cfg=dict(type='BN1d', eps=0.001, momentum=0.01),
         encoder_channels=((16, 16, 32), (32, 32, 64), (64, 64, 128), (128, 128)),
@@ -90,8 +84,6 @@ model = dict(
         upsample_cfg=dict(type='deconv', bias=False),
         use_conv_for_no_stride=True
     ),
-
-    # ------------------- Camera-related modules (from the second config) ----
     img_backbone=dict(
         type='mmdet.SwinTransformer',
         embed_dims=96,
@@ -110,10 +102,7 @@ model = dict(
         convert_weights=True,
         init_cfg=dict(
             type='Pretrained',
-            checkpoint=(
-                'https://github.com/SwinTransformer/storage/releases/'
-                'download/v1.0.0/swin_tiny_patch4_window7_224.pth'
-            )
+            checkpoint='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth'
         )
     ),
     img_neck=dict(
@@ -125,32 +114,93 @@ model = dict(
         norm_cfg=dict(type='BN2d', requires_grad=True),
         act_cfg=dict(type='ReLU', inplace=True),
         upsample_cfg=dict(mode='bilinear', align_corners=False)
-    ),
-
-    view_transform=dict(
-        type='LSSTransform',
-        in_channels=256,
-        out_channels=256,
-        image_size=[256, 704],
-        feature_size=[32, 88],  # Matches [image_size[0] // 8, image_size[1] // 8]
-        xbound=[-51.2, 51.2, 0.4],  # Changed from [-54.0, 54.0, 0.3]
-        ybound=[-51.2, 51.2, 0.4],  # Changed from [-54.0, 54.0, 0.3]
-        zbound=[-10.0, 10.0, 20.0],  # Changed from previous values
-        dbound=[1.0, 60.0, 0.5],
-        downsample=2
-    ),
-    fusion_layer=dict(type='ConvFuser', in_channels=[256, 256], out_channels=256),
-    seg_head=dict(
-        type='BEVSegmentationHead',
-        in_channels=512,
-        grid_transform=dict(
-            input_scope=[[-51.2, 51.2, 0.8], [-51.2, 51.2, 0.8]],
-            output_scope=[[-50, 50, 0.5], [-50, 50, 0.5]],
-        ),
-        classes=map_classes,
-        loss="focal"
     )
 )
+
+##############################################################################
+# Teacher model configuration (original architecture)
+##############################################################################
+teacher_cfg = base_model_cfg.copy()
+teacher_cfg.update(
+    dict(
+        view_transform=dict(
+            type='LSSTransform',
+            in_channels=256,
+            out_channels=80,  # Original channel size
+            image_size=image_size,
+            feature_size=[32, 88],
+            xbound=[-51.2, 51.2, 0.4],
+            ybound=[-51.2, 51.2, 0.4],
+            zbound=[-10.0, 10.0, 20.0],
+            dbound=[1.0, 60.0, 0.5],
+            downsample=2
+        ),
+        fusion_layer=dict(
+            type='ConvFuser',
+            in_channels=[256, 80],  # Original channel sizes
+            out_channels=256
+        ),
+        seg_head=dict(
+            type='BEVSegmentationHead',
+            in_channels=512,
+            grid_transform=dict(
+                input_scope=[[-51.2, 51.2, 0.8], [-51.2, 51.2, 0.8]],
+                output_scope=[[-50, 50, 0.5], [-50, 50, 0.5]],
+            ),
+            classes=map_classes,
+            loss="focal"
+        )
+    )
+)
+
+##############################################################################
+# Student model configuration (modified architecture)
+##############################################################################
+student_cfg = base_model_cfg.copy()
+student_cfg.update(
+    dict(
+        view_transform=dict(
+            type='LSSTransform',
+            in_channels=256,
+            out_channels=256,  # Modified channel size
+            image_size=image_size,
+            feature_size=[32, 88],
+            xbound=[-51.2, 51.2, 0.4],
+            ybound=[-51.2, 51.2, 0.4],
+            zbound=[-10.0, 10.0, 20.0],
+            dbound=[1.0, 60.0, 0.5],
+            downsample=2
+        ),
+        fusion_layer=dict(
+            type='ConvFuser',
+            in_channels=[256, 256],  # Modified channel sizes
+            out_channels=256
+        ),
+        seg_head=dict(
+            type='BEVSegmentationHead',
+            in_channels=512,
+            grid_transform=dict(
+                input_scope=[[-51.2, 51.2, 0.8], [-51.2, 51.2, 0.8]],
+                output_scope=[[-50, 50, 0.5], [-50, 50, 0.5]],
+            ),
+            classes=map_classes,
+            loss="focal"
+        )
+    )
+)
+
+##############################################################################
+# Main model configuration (distillation wrapper)
+##############################################################################
+model = dict(
+    type='DistillBEVFusion',
+    teacher_cfg=teacher_cfg,
+    student_cfg=student_cfg,
+    teacher_checkpoint='path/to/your/pretrained/model.pth',  # Update this path
+    distill_weight=0.1,
+    temperature=2.0
+)
+
 
 ##############################################################################
 # Pipeline (the second config overrides the base pipelines entirely)
@@ -306,7 +356,7 @@ test_pipeline = [
 # Dataloaders (the second config references the base but overrides pipeline)
 ##############################################################################
 train_dataloader = dict(
-    batch_size=3,
+    batch_size=4,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(type='DefaultSampler', shuffle=True),
@@ -414,25 +464,16 @@ test_cfg = dict()
 
 optim_wrapper = dict(
     type='OptimWrapper',
-    optimizer=dict(type='AdamW', lr=0.001, weight_decay=0.01),
+    optimizer=dict(type='AdamW', lr=0.0001, weight_decay=0.01),
     clip_grad=dict(max_norm=35, norm_type=2)
 )
 
 auto_scale_lr = dict(enable=True, base_batch_size=32)
 
-
-#default_hooks = dict(
-#    logger=dict(type="LoggerHook", interval=1),
-#    checkpoint=dict(
-#        type="CheckpointHook",
-#        interval=2000,  # Save every 500 iterations
-#        by_epoch=False,  # Change to iteration-based saving
-#        max_keep_ckpts=100,
-#    ),  # Keep only the last 3 checkpoints to save disk space
-#)
 default_hooks = dict(
     logger=dict(type='LoggerHook', interval=50),
-    checkpoint=dict(type='CheckpointHook', interval=1))
+    checkpoint=dict(type='CheckpointHook', interval=1)
+)
 
 # If you want to enable find_unused_parameters or add custom hooks:
 find_unused_parameters = True

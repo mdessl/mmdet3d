@@ -65,10 +65,11 @@ class BEVFusion(Base3DDetector):
             self.seg_head = MODELS.build(seg_head)
 
         self.init_weights()
-        self.freeze_modules(
-            module_keywords=["data_preprocessor", "img_backbone", "img_neck", 'pts_voxel_encoder', 'pts_middle_encoder', 'pts_backbone', "pts_neck","seg_head"],
-            exclude_keywords=["view_transform", "fusion_layer"]
-        )
+        #self.freeze_modules(
+        #    module_keywords=["data_preprocessor", "img_backbone", "img_neck", 'pts_voxel_encoder', 'pts_middle_encoder', 'pts_backbone', "pts_neck","seg_head"],
+        #     exclude_keywords=["view_transform", "fusion_layer"]
+        #)
+
     def _forward(self,
                  batch_inputs: Tensor,
                  batch_data_samples: OptSampleList = None):
@@ -150,11 +151,11 @@ class BEVFusion(Base3DDetector):
         img_metas,
     ) -> torch.Tensor:
         B, N, C, H, W = x.size()
+        #import pdb; pdb.set_trace()
         x = x.view(B * N, C, H, W).contiguous()
 
         x = self.img_backbone(x)
         x = self.img_neck(x)
-
         if not isinstance(x, torch.Tensor):
             x = x[0]
 
