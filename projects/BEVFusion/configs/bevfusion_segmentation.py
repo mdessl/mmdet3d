@@ -314,7 +314,7 @@ model = dict(
     view_transform=dict(
         type='LSSTransform',
         in_channels=256,
-        out_channels=256,
+        out_channels=80,
         image_size=[256, 704],
         feature_size=[32, 88],
         xbound=[-51.2, 51.2, 0.4],
@@ -323,7 +323,7 @@ model = dict(
         dbound=[1.0, 60.0, 0.5],
         downsample=2),
     fusion_layer=dict(
-        type='ConvFuser', in_channels=[256, 256], out_channels=256),
+        type='ConvFuser', in_channels=[256, 80], out_channels=256),
     seg_head=dict(
         type='BEVSegmentationHead',
         in_channels=512,

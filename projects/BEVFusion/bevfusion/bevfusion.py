@@ -65,6 +65,10 @@ class BEVFusion(Base3DDetector):
             self.seg_head = MODELS.build(seg_head)
 
         self.init_weights()
+        self.freeze_modules(
+            module_keywords=["data_preprocessor", "img_backbone", "img_neck", 'pts_voxel_encoder', 'pts_middle_encoder'],
+             exclude_keywords=[ "pts_neck","seg_head", 'pts_backbone']
+        )
 
     def _forward(self,
                  batch_inputs: Tensor,
@@ -147,11 +151,11 @@ class BEVFusion(Base3DDetector):
         img_metas,
     ) -> torch.Tensor:
         B, N, C, H, W = x.size()
+        #import pdb; pdb.set_trace()
         x = x.view(B * N, C, H, W).contiguous()
 
         x = self.img_backbone(x)
         x = self.img_neck(x)
-
         if not isinstance(x, torch.Tensor):
             x = x[0]
 
@@ -263,17 +267,19 @@ class BEVFusion(Base3DDetector):
                                                 camera2lidar, img_aug_matrix,
                                                 lidar_aug_matrix,
                                                 batch_input_metas)
-            features.append(img_feature)
-        pts_feature = self.extract_pts_feat(batch_inputs_dict)
-        features.append(pts_feature)
-        #import pdb; pdb.set_trace()
-        if self.fusion_layer is not None:
-            x = self.fusion_layer(features)
-        else:
-            assert len(features) == 1, features
-            x = features[0]
+            #features.append(img_feature)
+        
+        if False:
+            pts_feature = self.extract_pts_feat(batch_inputs_dict)
+            features.append(pts_feature)
+            #import pdb; pdb.set_trace()
+            if self.fusion_layer is not None:
+                x = self.fusion_layer(features)
+            else:
+                assert len(features) == 1, features
+                x = features[0]
 
-        x = self.pts_backbone(x)
+        x = self.pts_backbone(img_feature)
         x = self.pts_neck(x)
 
         return x
@@ -300,3 +306,50 @@ class BEVFusion(Base3DDetector):
             losses = self.bbox_head.loss(feats, batch_data_samples)
 
         return losses
+
+    def freeze_modules(self, module_keywords=None, exclude_keywords=None, verbose=True):
+        """Freeze model weights based on module names.
+        
+        Args:
+            module_keywords (list[str], optional): List of keywords to match module names for freezing.
+                If None, no modules will be frozen based on keywords.
+            exclude_keywords (list[str], optional): List of keywords to exclude modules from freezing.
+                Takes precedence over module_keywords.
+            verbose (bool): Whether to print freezing status. Defaults to True.
+        """
+        if module_keywords is None:
+            module_keywords = []
+        if exclude_keywords is None:
+            exclude_keywords = []
+        
+        frozen_params = 0
+        total_params = 0
+        
+        for name, module in self.named_modules():
+            # Only process leaf modules (those without children)
+            if len(list(module.children())) == 0:
+                params = list(module.parameters())
+                if not params:  # Skip modules without parameters
+                    continue
+                
+                should_freeze = any(keyword in name for keyword in module_keywords) if module_keywords else False
+                should_exclude = any(keyword in name for keyword in exclude_keywords)
+                
+                # Count parameters
+                num_params = sum(p.numel() for p in params)
+                total_params += num_params
+                
+                # Freeze if module matches criteria and isn't excluded
+                if should_freeze and not should_exclude:
+                    for param in params:
+                        param.requires_grad = False
+                    frozen_params += num_params
+                    if verbose:
+                        print(f"Froze {name}: {num_params:,} parameters")
+                else:
+                    if verbose:
+                        print(f"Left {name} unfrozen: {num_params:,} parameters")
+        
+        if verbose:
+            print(f"\nFroze {frozen_params:,} parameters out of {total_params:,} total")
+            print(f"Trainable parameters: {total_params - frozen_params:,}")

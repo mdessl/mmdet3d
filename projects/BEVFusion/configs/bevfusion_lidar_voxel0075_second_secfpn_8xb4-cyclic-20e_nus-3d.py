@@ -16,7 +16,7 @@ class_names = [
 
 metainfo = dict(classes=class_names)
 dataset_type = 'NuScenesDataset'
-data_root = 'data/nuscenes/'
+data_root = 'data/mini/'
 data_prefix = dict(
     pts='samples/LIDAR_TOP',
     CAM_FRONT='samples/CAM_FRONT',
@@ -267,7 +267,7 @@ test_pipeline = [
 ]
 
 train_dataloader = dict(
-    batch_size=1,
+    batch_size=2,
     num_workers=4,
     persistent_workers=True,
     sampler=dict(type='DefaultSampler', shuffle=True),

@@ -276,13 +276,18 @@ class Det3DDataset(BaseDataset):
         """
 
         if self.modality['use_lidar']:
-            info['lidar_points']['lidar_path'] = \
-                osp.join(
-                    self.data_prefix.get('pts', ''),
-                    info['lidar_points']['lidar_path'])
+            if "lidar_points" in info:
 
-            info['num_pts_feats'] = info['lidar_points']['num_pts_feats']
-            info['lidar_path'] = info['lidar_points']['lidar_path']
+                info['lidar_points']['lidar_path'] = \
+                    osp.join(
+                        self.data_prefix.get('pts', ''),
+                        info['lidar_points']['lidar_path'])
+
+                info['num_pts_feats'] = info['lidar_points']['num_pts_feats']
+                info['lidar_path'] = info['lidar_points']['lidar_path']
+            else:
+                info['num_pts_feats'] = info["num_lidar_pts"]
+
             if 'lidar_sweeps' in info:
                 for sweep in info['lidar_sweeps']:
                     file_suffix = sweep['lidar_points']['lidar_path'].split(
